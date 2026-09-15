@@ -1,69 +1,163 @@
-import Image from "next/image";
+// ponytail: landing statis + 1 pulau client (interactive.tsx). CTA dummy ke /chat.
+import { GradientLink, MobileMenu } from "../components/landing/interactive";
+import { DesktopNav, SectionHeading, StepCard } from "../components/landing/section";
+
+const STEPS = [
+  {
+    title: "Connect Phantom",
+    description: "Sambungkan wallet Phantom — tanpa bikin akun, tanpa username/password.",
+  },
+  {
+    title: "Sign message",
+    description: "Tanda tangani pesan sekali untuk membuktikan wallet ini milikmu.",
+  },
+  {
+    title: "Chat",
+    description: "Ngobrol dengan companion yang mengingat konteks percakapanmu.",
+  },
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="min-h-screen bg-black text-[#c3c6cd]">
+      <div className="site-background" aria-hidden />
+
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-black/75 backdrop-blur-xl border-b border-white/10">
+        <div className="relative mx-auto flex h-[72px] max-w-[68rem] items-center justify-between px-5 lg:px-0">
+          <a href="#" className="flex items-center gap-2 text-white">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0038ff] text-sm font-bold">
+              E
+            </span>
+            <span className="font-semibold tracking-tight">Echo</span>
+          </a>
+          <DesktopNav />
+          <MobileMenu />
+        </div>
+      </header>
+
+      {/* Hero */}
+      <section className="relative overflow-hidden">
+        <div className="pointer-events-none absolute left-1/2 top-1/4 z-[1] h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-[#0038ff]/25 blur-3xl" />
+        <div className="relative z-10 mx-auto max-w-[68rem] px-5 pb-24 pt-24 lg:px-0 lg:pb-32 lg:pt-32">
+          <div className="max-w-5xl">
+            <div className="mb-6 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/50">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#77e7ff]" />
+              Wallet AI Companion
+            </div>
+            <h1 className="max-w-5xl text-5xl font-semibold leading-[1.02] tracking-[-0.045em] text-white sm:text-6xl md:text-7xl lg:text-8xl">
+              Satu wallet, satu{" "}
+              <span className="bg-gradient-to-r from-[#f1b29e] via-[#b354fe] to-[#77e7ff] bg-clip-text text-transparent">
+                companion
+              </span>{" "}
+              pribadi.
+            </h1>
+            <p className="mt-8 max-w-2xl text-base leading-7 text-[#c3c6cd]/70 sm:text-lg">
+              Connect Phantom wallet, companion kamu langsung tersedia. Ngobrol
+              tanpa bikin akun baru — dia mengingat konteks penting dari
+              percakapan sebelumnya.
+            </p>
+            <div className="mt-9 flex flex-wrap gap-3">
+              <GradientLink
+                href="/chat"
+                className="flex items-center gap-2 rounded-full px-6 py-3.5 text-sm font-medium text-white"
+              >
+                <span>Connect Wallet →</span>
+              </GradientLink>
+              <GradientLink
+                href="#concept"
+                className="flex items-center gap-2 rounded-full px-6 py-3.5 text-sm"
+              >
+                <span>Explore Echo</span>
+              </GradientLink>
+            </div>
+            <p className="mt-5 text-xs text-white/40">
+              Phantom EVM · Robinhood Testnet (46630) · tanpa username / password
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Concept */}
+      <section
+        id="concept"
+        className="mx-auto max-w-[68rem] scroll-mt-24 px-5 py-24 lg:px-0 lg:py-32"
+      >
+        <SectionHeading
+          eyebrow="Concept"
+          accent="text-[#77e7ff]"
+          title="Bukan chatbot publik."
+          muted="Milik dompetmu."
+          description="Wallet adalah identitasmu. Setiap wallet punya satu companion yang menyimpan history dan membangun memory agar terasa mengenalmu."
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+      </section>
+
+      {/* How it works */}
+      <section id="how" className="scroll-mt-24 border-y border-white/10 bg-black/30">
+        <div className="mx-auto max-w-[68rem] px-5 py-24 lg:px-0 lg:py-32">
+          <div className="mb-12 flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
+            <div className="max-w-xl">
+              <div className="mb-4 text-xs uppercase tracking-[0.2em] text-[#b354fe]">
+                How it works
+              </div>
+              <h2 className="text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl">
+                Connect. <span className="text-white/40">Sign. Ngobrol.</span>
+              </h2>
+            </div>
+            <p className="max-w-sm text-sm leading-6 text-[#c3c6cd]/50">
+              Onboarding cepat tanpa akun. Verifikasi signature menjaga companion-mu
+              tetap milikmu.
+            </p>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            {STEPS.map((s, i) => (
+              <StepCard key={s.title} index={i} title={s.title} description={s.description} />
+            ))}
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      {/* CTA / footer */}
+      <footer id="contact" className="relative overflow-hidden border-t border-white/10">
+        <div className="relative z-10 mx-auto max-w-[68rem] px-5 py-24 lg:px-0 lg:py-32">
+          <div className="max-w-4xl">
+            <div className="mb-5 text-xs uppercase tracking-[0.2em] text-[#77e7ff]">
+              Ready?
+            </div>
+            <h2 className="text-5xl font-semibold leading-[1.02] tracking-[-0.045em] text-white sm:text-6xl lg:text-7xl">
+              Temui{" "}
+              <span className="bg-gradient-to-r from-[#f1b29e] via-[#b354fe] to-[#77e7ff] bg-clip-text text-transparent">
+                companion-mu.
+              </span>
+            </h2>
+            <p className="mt-7 max-w-xl text-base leading-7 text-[#c3c6cd]/60">
+              Connect wallet dan mulai percakapan pertama. Companion dibuat
+              otomatis untuk wallet baru.
+            </p>
+            <GradientLink
+              href="/chat"
+              className="mt-8 inline-flex items-center gap-2 rounded-full px-7 py-4 text-sm font-medium text-white"
+            >
+              <span>Start a conversation →</span>
+            </GradientLink>
+          </div>
+          <div className="mt-24 flex flex-col justify-between gap-4 border-t border-white/10 pt-7 text-xs text-white/35 sm:flex-row">
+            <span>© 2026 Echo — Wallet AI Companion</span>
+            <div className="flex gap-6">
+              <a
+                href="https://x.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-white"
+              >
+                X
+              </a>
+              <span>Contract: —</span>
+              <span>Testnet 46630</span>
+            </div>
+          </div>
         </div>
-      </main>
+      </footer>
     </div>
   );
 }

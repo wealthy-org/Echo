@@ -1,26 +1,136 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --color-echo-blue: #0038ff;
+  --color-echo-purple: #b354fe;
+  --color-echo-peach: #f1b29e;
+  --color-echo-cyan: #77e7ff;
+  --color-echo-muted: #c3c6cd;
+  --color-echo-card: #19191b;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ponytail: token visual dari docs/reference, tanpa GTM/gambar eksternal/slider */
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: #000;
+  color: #c3c6cd;
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+::selection {
+  background: #0038ff;
+  color: white;
+}
+
+/* 5-layer viewport background: grid + 3 radial glow */
+.site-background {
+  position: fixed;
+  inset: 0;
+  z-index: -20;
+  pointer-events: none;
+  background-color: #000;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    radial-gradient(circle at 88% 18%, rgba(0, 56, 255, 0.19), transparent 30%),
+    radial-gradient(circle at 92% 72%, rgba(179, 84, 254, 0.13), transparent 28%),
+    radial-gradient(circle at 66% 86%, rgba(0, 56, 255, 0.14), transparent 30%);
+  background-size:
+    44px 44px,
+    44px 44px,
+    auto,
+    auto,
+    auto;
+}
+
+/* tombol gradient dengan glow mengikuti kursor (--mx/--my) */
+.gradient-button {
+  --mx: 50%;
+  --my: 50%;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.045);
+  transition:
+    border-color 200ms ease,
+    transform 200ms ease,
+    background 200ms ease;
+}
+
+.gradient-button::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  z-index: -1;
+  opacity: 0;
+  background: radial-gradient(
+    circle 180px at var(--mx) var(--my),
+    rgba(0, 56, 255, 0.75),
+    rgba(179, 84, 254, 0.24) 35%,
+    transparent 70%
+  );
+  transition: opacity 250ms ease;
+}
+
+.gradient-button:hover {
+  border-color: rgba(255, 255, 255, 0.34);
+  transform: translateY(-1px);
+}
+
+.gradient-button:hover::before {
+  opacity: 1;
+}
+
+.gradient-button > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* ticker marquee */
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: ticker 28s linear infinite;
+}
+
+@keyframes ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-33.333333%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #000;
+}
+::-webkit-scrollbar-thumb {
+  background: #29292d;
+  border-radius: 999px;
 }
