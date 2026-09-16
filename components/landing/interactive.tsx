@@ -2,6 +2,7 @@
 
 import { useCallback, useState, type MouseEvent, type ReactNode } from "react";
 import { NAV } from "./nav";
+import { ConnectButton } from "../wallet/connect-button";
 
 // ponytail: satu-satunya pulau client landing (cursor glow + menu).
 // Navigasi statis (DesktopNav) tinggal di section.tsx agar tidak masuk bundle client.
@@ -53,13 +54,10 @@ export function MobileMenu() {
                 {n.label}
               </a>
             ))}
-            <a
-              href="/chat"
-              onClick={() => setOpen(false)}
-              className="gradient-button mt-2 flex items-center justify-center rounded-full px-5 py-3 text-white"
-            >
-              <span>Connect Wallet</span>
-            </a>
+            <ConnectButton
+              onAction={() => setOpen(false)}
+              className="mt-2 flex items-center justify-center rounded-full px-5 py-3 text-white"
+            />
           </nav>
         </div>
       )}

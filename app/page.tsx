@@ -1,6 +1,7 @@
-// ponytail: landing statis + 1 pulau client (interactive.tsx). CTA dummy ke /chat.
+// ponytail: landing statis + 1 pulau client (interactive.tsx). CTA connect via ConnectButton (Phase 3).
 import { GradientLink, MobileMenu } from "../components/landing/interactive";
 import { DesktopNav, SectionHeading, StepCard } from "../components/landing/section";
+import { ConnectButton } from "../components/wallet/connect-button";
 
 const STEPS = [
   {
@@ -58,12 +59,10 @@ export default function Home() {
               percakapan sebelumnya.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
-              <GradientLink
-                href="/chat"
+              <ConnectButton
+                connectLabel="Connect Wallet →"
                 className="flex items-center gap-2 rounded-full px-6 py-3.5 text-sm font-medium text-white"
-              >
-                <span>Connect Wallet →</span>
-              </GradientLink>
+              />
               <GradientLink
                 href="#concept"
                 className="flex items-center gap-2 rounded-full px-6 py-3.5 text-sm"
@@ -134,12 +133,10 @@ export default function Home() {
               Connect wallet dan mulai percakapan pertama. Companion dibuat
               otomatis untuk wallet baru.
             </p>
-            <GradientLink
-              href="/chat"
+            <ConnectButton
+              connectLabel="Start a conversation →"
               className="mt-8 inline-flex items-center gap-2 rounded-full px-7 py-4 text-sm font-medium text-white"
-            >
-              <span>Start a conversation →</span>
-            </GradientLink>
+            />
           </div>
           <div className="mt-24 flex flex-col justify-between gap-4 border-t border-white/10 pt-7 text-xs text-white/35 sm:flex-row">
             <span>© 2026 Echo — Wallet AI Companion</span>

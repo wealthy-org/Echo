@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { NAV } from "./nav";
-import { GradientLink } from "./interactive";
+import { ConnectButton } from "../wallet/connect-button";
 
 // ponytail: pola berulang landing (dipakai 3x+). Sekali pakai (hero/footer) tetap di page.tsx.
 
@@ -58,9 +58,7 @@ export function DesktopNav() {
           {n.label}
         </a>
       ))}
-      <GradientLink href="/chat" className="rounded-full px-5 py-2.5 text-white">
-        <span>Connect Wallet</span>
-      </GradientLink>
+      <ConnectButton className="rounded-full px-5 py-2.5 text-[13px] text-white" />
     </nav>
   );
 }
