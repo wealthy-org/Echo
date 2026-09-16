@@ -6,12 +6,15 @@ import {
   useChainId,
   useConnect,
   useDisconnect,
+  useSignMessage,
   useSwitchChain,
 } from "wagmi";
 import { appChain } from "../../lib/wallet/chains";
+import { buildAuthMessage } from "../../lib/auth/message";
+import { useSession } from "./use-session";
 
-// ponytail: 1 tombol untuk 4 state (install / connect / switch / connected).
-// Error cukup tooltip — UI error beneran di Phase 11 (FR-12).
+// ponytail: 1 tombol untuk 6 state (install / connect / switch / sign-in / signed / loading).
+// Error cukup tooltip + label "Try again" — UI error beneran di Phase 11 (FR-12).
 
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
@@ -40,6 +43,9 @@ export function ConnectButton({
     isPending: isSwitching,
     error: switchError,
   } = useSwitchChain();
+  const { signMessageAsync, isPending: isSigning } = useSignMessage();
+  const { session, isLoading: isSessionLoading, refresh } = useSession();
+  const [signError, setSignError] = useState<string | null>(null);
 
   const base = `gradient-button ${className}`.trim();
 
@@ -49,7 +55,7 @@ export function ConnectButton({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  if (!mounted || status === "reconnecting") {
+  if (!mounted || status === "reconnecting" || isSessionLoading) {
     return (
       <button type="button" disabled className={base}>
         <span>{connectLabel}</span>
@@ -108,6 +114,66 @@ export function ConnectButton({
     );
   }
 
+  // ponytail: session milik wallet lain (ganti wallet tanpa disconnect) = belum signed.
+  const signedIn =
+    !!session?.authenticated &&
+    !!address &&
+    session.walletAddress === address.toLowerCase();
+
+  async function handleSignIn() {
+    if (!address) return;
+    setSignError(null);
+    try {
+      const timestamp = new Date().toISOString();
+      const signature = await signMessageAsync({
+        message: buildAuthMessage(address, timestamp),
+      });
+      const res = await fetch("/api/wallet/connect", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ address, timestamp, signature }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSignError(data?.error?.message ?? "Sign in failed.");
+        return;
+      }
+      onAction?.();
+      await refresh();
+    } catch (e) {
+      const msg = (e as Error)?.message ?? "";
+      setSignError(
+        /reject|denied|cancel/i.test(msg)
+          ? "Signature cancelled. Click once more to try again."
+          : "Sign in failed. Please try again."
+      );
+    }
+  }
+
+  async function handleDisconnect() {
+    onAction?.();
+    disconnect();
+    await fetch("/api/wallet/disconnect", { method: "POST" });
+    await refresh();
+  }
+
+  if (!signedIn) {
+    return (
+      <button
+        type="button"
+        disabled={isSigning}
+        title={signError ?? undefined}
+        onClick={() => void handleSignIn()}
+        className={base}
+      >
+        {/* ponytail: label ganti "Try again" saat gagal — penanda tanpa geser layout. */}
+        <span>
+          {isSigning ? "Signing…" : signError ? "Try again" : "Sign in with Echo"}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <span className="inline-flex items-center gap-2">
       <span className="rounded-full border border-white/15 px-4 py-2 text-sm text-white">
@@ -117,10 +183,7 @@ export function ConnectButton({
         type="button"
         aria-label="Disconnect wallet"
         title="Disconnect"
-        onClick={() => {
-          onAction?.();
-          disconnect();
-        }}
+        onClick={() => void handleDisconnect()}
         className="gradient-button flex h-8 w-8 items-center justify-center rounded-full text-white"
       >
         <span aria-hidden className="text-base leading-none">
