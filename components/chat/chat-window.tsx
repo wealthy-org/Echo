@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { MAX_MESSAGE_LENGTH } from "../../lib/chat/constants";
+import { CompanionContent } from "./message-content";
 
 // ponytail: 1 file untuk list + input + send + loading/error (PRD Phase 6).
 // Visual ikut sistem docs/reference (token echo-*, kartu #19191b, gradient-button).
@@ -16,8 +18,51 @@ export function ChatWindow() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const tooLong = draft.length > MAX_MESSAGE_LENGTH;
+
+  // ponytail: auto-grow 1–5 baris (±160px), selebihnya scroll dalam textarea.
+  function autoresize() {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }
+
+  function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      void handleSend();
+    }
+  }
+
+  // ponytail: history dimuat sekali saat mount (Phase 7). Gagal = empty state,
+  // bukan error fatal — user tetap bisa kirim pesan baru.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/chat/history", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : { messages: [] }))
+      .then((data) => {
+        if (!cancelled && Array.isArray(data.messages)) {
+          setMessages(
+            data.messages.filter(
+              (m: ChatMessage) => m.role === "user" || m.role === "companion"
+            )
+          );
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingHistory(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // ponytail: pola yang sama dengan GradientLink landing — glow ikuti kursor.
   const trackCursor = useCallback((e: MouseEvent<HTMLElement>) => {
@@ -34,7 +79,13 @@ export function ChatWindow() {
   async function handleSend() {
     const message = draft.trim();
     if (!message || sending) return;
+    // ponytail: validasi panjang di client dulu — error muncul sebelum request.
+    if (message.length > MAX_MESSAGE_LENGTH) {
+      setError(`Message too long (max ${MAX_MESSAGE_LENGTH} characters).`);
+      return;
+    }
     setDraft("");
+    if (inputRef.current) inputRef.current.style.height = "auto";
     setError(null);
     setMessages((m) => [...m, { role: "user", content: message }]);
     setSending(true);
@@ -57,7 +108,12 @@ export function ChatWindow() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="mx-auto flex w-full max-w-[68rem] flex-1 flex-col space-y-4 overflow-y-auto px-5 py-6">
-        {messages.length === 0 && !sending && (
+        {loadingHistory && (
+          <p className="animate-pulse pt-16 text-center text-sm text-echo-muted/60">
+            Loading history…
+          </p>
+        )}
+        {!loadingHistory && messages.length === 0 && !sending && (
           <div className="flex flex-col items-center pt-16 text-center">
             <div className="mb-4 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-echo-cyan">
               <span className="h-1.5 w-1.5 rounded-full bg-echo-cyan"></span>
@@ -76,15 +132,15 @@ export function ChatWindow() {
             key={i}
             className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
           >
-            <p
-              className={`max-w-[80%] whitespace-pre-wrap rounded-3xl px-5 py-3 text-sm leading-6 ${
-                m.role === "user"
-                  ? "bg-echo-blue text-white"
-                  : "border border-white/10 bg-echo-card text-white"
-              }`}
-            >
-              {m.content}
-            </p>
+            {m.role === "user" ? (
+              <p className="max-w-[80%] whitespace-pre-wrap rounded-3xl bg-echo-blue px-5 py-3 text-sm leading-6 text-white">
+                {m.content}
+              </p>
+            ) : (
+              <div className="max-w-[80%] rounded-3xl border border-white/10 bg-echo-card px-5 py-3 text-sm leading-6 text-white">
+                <CompanionContent content={m.content} />
+              </div>
+            )}
           </div>
         ))}
         {sending && (
@@ -100,25 +156,41 @@ export function ChatWindow() {
         <p className="px-4 pb-1 text-center text-sm text-echo-peach">{error}</p>
       )}
       <div className="border-t border-white/10 bg-black/30">
+        <div className="mx-auto flex w-full max-w-[68rem] items-center justify-between px-5 pt-2 text-xs">
+          <span className="text-echo-peach">
+            {tooLong
+              ? `Message too long (max ${MAX_MESSAGE_LENGTH} characters).`
+              : ""}
+          </span>
+          <span className={tooLong ? "text-echo-peach" : "text-white/30"}>
+            {draft.length}/{MAX_MESSAGE_LENGTH}
+          </span>
+        </div>
         <form
-          className="mx-auto flex w-full max-w-[68rem] gap-2 px-5 py-4"
+          className="mx-auto flex w-full max-w-[68rem] items-end gap-2 px-5 py-3"
           onSubmit={(e) => {
             e.preventDefault();
             void handleSend();
           }}
         >
-          <input
+          <textarea
+            ref={inputRef}
+            rows={1}
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Message…"
+            onChange={(e) => {
+              setDraft(e.target.value);
+              autoresize();
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder="Message… (Enter kirim, Shift+Enter baris baru)"
             aria-label="Chat message"
-            className="min-w-0 flex-1 rounded-full border border-white/10 bg-echo-card px-5 py-3 text-sm text-white placeholder:text-white/30 focus:border-white/40 focus:outline-none"
+            className="max-h-40 min-w-0 flex-1 resize-none overflow-y-auto rounded-3xl border border-white/10 bg-echo-card px-5 py-3 text-sm leading-6 text-white placeholder:text-white/30 focus:border-white/40 focus:outline-none"
           />
           <button
             type="submit"
-            disabled={!draft.trim() || sending}
+            disabled={!draft.trim() || sending || tooLong}
             onMouseMove={trackCursor}
-            className="gradient-button rounded-full px-6 py-3 text-sm font-medium text-white disabled:opacity-40"
+            className="gradient-button shrink-0 rounded-full px-6 py-3 text-sm font-medium text-white disabled:opacity-40"
           >
             <span>Send</span>
           </button>
