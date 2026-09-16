@@ -123,12 +123,17 @@ export function ConnectButton({
     session.walletAddress === address.toLowerCase();
 
   async function handleSignIn() {
-    if (!address) return;
+    // ponytail: pin connector+account eksplisit — signMessageAsync tanpa ini
+    // menebak connector aktif dan bisa salah pada percobaan pertama
+    // (Phantom menyuntik >1 provider). Guard phantom cegah throw buta.
+    if (!address || !phantom) return;
     setSignError(null);
     try {
       const timestamp = new Date().toISOString();
       const signature = await signMessageAsync({
         message: buildAuthMessage(address, timestamp),
+        connector: phantom,
+        account: address,
       });
       const res = await fetch("/api/wallet/connect", {
         method: "POST",
@@ -146,6 +151,9 @@ export function ConnectButton({
       // /chat baca ulang via useSession. Tanpa reload = tanpa flicker wallet reconnect.
       router.push("/chat");
     } catch (e) {
+      // ponytail: error asli ke console — tooltip cuma label user-friendly.
+      // Kalau sign masih gagal, 1 baris ini vonis finalnya.
+      console.error("wallet sign-in failed:", e);
       const msg = (e as Error)?.message ?? "";
       setSignError(
         /reject|denied|cancel/i.test(msg)

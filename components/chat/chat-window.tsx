@@ -6,8 +6,8 @@ import { CompanionContent } from "./message-content";
 
 // ponytail: 1 file untuk list + input + send + loading/error (PRD Phase 6).
 // Visual ikut sistem docs/reference (token echo-*, kartu #19191b, gradient-button).
-// Kontrak yg diasumsikan ke Phase 7: POST /api/chat { message } -> { content }.
-// Streaming (Phase 8) tinggal ganti fetch ini dengan reader — bentuk bubble tak berubah.
+// Kontrak Phase 8: POST /api/chat { message } -> SSE `data: <delta-json>`, tutup `[DONE]`.
+// Phase 9 tinggal hook memory regen setelah stream selesai — bubble tak berubah.
 
 interface ChatMessage {
   role: "user" | "companion";
@@ -18,6 +18,7 @@ export function ChatWindow() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [streamed, setStreamed] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -87,6 +88,7 @@ export function ChatWindow() {
     setDraft("");
     if (inputRef.current) inputRef.current.style.height = "auto";
     setError(null);
+    setStreamed(false);
     setMessages((m) => [...m, { role: "user", content: message }]);
     setSending(true);
     try {
@@ -95,9 +97,54 @@ export function ChatWindow() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ message }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error?.message ?? "Send failed.");
-      setMessages((m) => [...m, { role: "companion", content: data.content }]);
+      // ponytail: error validasi (400/401/404) tetap JSON — hanya 200 yang SSE.
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error?.message ?? "Send failed.");
+      }
+      // Bubble companion dibuat kosong duluan — delta pertama tinggal isi.
+      setMessages((m) => [...m, { role: "companion", content: "" }]);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let reply = "";
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) {
+            const text = line.trim();
+            if (!text.startsWith("data:")) continue;
+            const payload = text.slice(5).trim();
+            if (payload === "[DONE]") continue;
+            const parsed: unknown = JSON.parse(payload);
+            if (typeof parsed === "string") {
+              reply += parsed;
+              const snapshot = reply;
+              setStreamed(true);
+              setMessages((m) => {
+                const next = [...m];
+                next[next.length - 1] = { role: "companion", content: snapshot };
+                return next;
+              });
+            } else {
+              throw new Error(
+                (parsed as { error?: string })?.error ?? "Send failed."
+              );
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+      if (!reply.trim()) {
+        // ponytail: stream selesai tanpa isi = buang bubble kosong, gagalkan sekalian.
+        setMessages((m) => m.slice(0, -1));
+        throw new Error("Companion returned an empty response.");
+      }
     } catch (e) {
       setError((e as Error)?.message ?? "Send failed. Please try again.");
     } finally {
@@ -143,7 +190,7 @@ export function ChatWindow() {
             )}
           </div>
         ))}
-        {sending && (
+        {sending && !streamed && (
           <div className="flex justify-start">
             <p className="animate-pulse rounded-3xl border border-white/10 bg-echo-card px-5 py-3 text-sm text-echo-muted/60">
               Echo mengetik…

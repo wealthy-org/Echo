@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "../../components/wallet/use-session";
+import { useCompanion } from "../../components/companion/use-companion";
 import { ConnectButton } from "../../components/wallet/connect-button";
+import { CompanionPanel } from "../../components/companion/companion-panel";
 import { ChatWindow } from "../../components/chat/chat-window";
 
 // ponytail: shell dulu, UI chat penuh Phase 6. Guard di client karena session
@@ -13,6 +15,8 @@ import { ChatWindow } from "../../components/chat/chat-window";
 export default function ChatPage() {
   const router = useRouter();
   const { session, isLoading } = useSession();
+  const { profile } = useCompanion();
+  const [panelOpen, setPanelOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !session?.authenticated) router.replace("/");
@@ -32,9 +36,21 @@ export default function ChatPage() {
       <div className="site-background" aria-hidden />
       <header className="sticky top-0 z-50 border-b border-white/10 bg-black/75 backdrop-blur-xl">
         <div className="mx-auto flex h-[72px] w-full max-w-[68rem] items-center justify-between px-5">
-          <span className="font-semibold tracking-[-0.02em]">
-            Echo
-          </span>
+          <div className="relative">
+            <button
+              onClick={() => setPanelOpen((v) => !v)}
+              className="font-semibold tracking-[-0.02em] transition hover:opacity-70"
+              aria-haspopup="dialog"
+              aria-expanded={panelOpen}
+            >
+              {profile?.companion_name ?? "Echo"}
+            </button>
+            {panelOpen && (
+              <div className="absolute left-0 top-full z-50 mt-3">
+                <CompanionPanel />
+              </div>
+            )}
+          </div>
           <ConnectButton />
         </div>
       </header>

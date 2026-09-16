@@ -3,36 +3,77 @@ import { eq } from "drizzle-orm";
 import { companions } from "../../../db/schema";
 import { db } from "../../../lib/db";
 import { getSession } from "../../../lib/auth/session";
+import { MAX_COMPANION_NAME_LENGTH } from "../../../lib/companion/constants";
 
 // ponytail: kolom DB message_count di-map ke total_message_count agar API ikut PRD FR-08
 // tanpa rename kolom. created_at ikut terserialisasi ISO otomatis.
+// PATCH + reset di file ini/ini — guard session dipakai ulang (bukan wallet dari body).
 
-export async function GET() {
+type CompanionRow = typeof companions.$inferSelect;
+
+function toProfile(c: CompanionRow) {
+  return {
+    companion_name: c.companionName,
+    wallet_address: c.walletAddress,
+    created_at: c.createdAt,
+    total_message_count: c.messageCount,
+  };
+}
+
+function err(code: string, message: string, status: number) {
+  return NextResponse.json({ error: { code, message } }, { status });
+}
+
+async function requireCompanion() {
   const session = await getSession();
   if (!session.walletAddress || !session.companionId) {
-    return NextResponse.json(
-      { error: { code: "UNAUTHENTICATED", message: "Sign in required." } },
-      { status: 401 }
-    );
+    return { error: err("UNAUTHENTICATED", "Sign in required.", 401) };
   }
-
   const [companion] = await db
     .select()
     .from(companions)
     .where(eq(companions.id, session.companionId))
     .limit(1);
-
   if (!companion) {
-    return NextResponse.json(
-      { error: { code: "NOT_FOUND", message: "Companion not found." } },
-      { status: 404 }
+    return { error: err("NOT_FOUND", "Companion not found.", 404) };
+  }
+  return { companion };
+}
+
+export async function GET() {
+  const result = await requireCompanion();
+  if ("error" in result) return result.error;
+  return NextResponse.json(toProfile(result.companion));
+}
+
+export async function PATCH(request: Request) {
+  const result = await requireCompanion();
+  if ("error" in result) return result.error;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return err("VALIDATION_ERROR", "Invalid JSON body.", 400);
+  }
+  const { name } = (body ?? {}) as { name?: unknown };
+  const trimmed = typeof name === "string" ? name.trim() : "";
+  if (!trimmed) {
+    return err("VALIDATION_ERROR", "Companion name must not be empty.", 400);
+  }
+  if (trimmed.length > MAX_COMPANION_NAME_LENGTH) {
+    return err(
+      "VALIDATION_ERROR",
+      `Companion name must be at most ${MAX_COMPANION_NAME_LENGTH} characters.`,
+      400
     );
   }
 
-  return NextResponse.json({
-    companion_name: companion.companionName,
-    wallet_address: companion.walletAddress,
-    created_at: companion.createdAt,
-    total_message_count: companion.messageCount,
-  });
+  await db
+    .update(companions)
+    .set({ companionName: trimmed })
+    .where(eq(companions.id, result.companion.id));
+  return NextResponse.json(
+    toProfile({ ...result.companion, companionName: trimmed })
+  );
 }

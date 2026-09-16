@@ -5,6 +5,8 @@ import { companions } from "../../../../db/schema";
 import { db } from "../../../../lib/db";
 import { buildAuthMessage, isFreshTimestamp } from "../../../../lib/auth/message";
 import { getSession } from "../../../../lib/auth/session";
+import { DEFAULT_COMPANION_NAME } from "../../../../lib/companion/constants";
+import { getDefaultCompanionName } from "../../../../lib/companion/naming";
 
 // ponytail: error ikut format PRD FR-12 { error: { code, message } }.
 
@@ -79,6 +81,18 @@ export async function POST(request: Request) {
         .values({ walletAddress: normalized })
         .returning();
       companion = created;
+    }
+
+    // ponytail: nama default acak untuk yang namanya masih sentinel
+    // (belum pernah di-rename) — sekali jalan, login berikut tidak masuk
+    // cabang ini lagi.
+    if (companion.companionName === DEFAULT_COMPANION_NAME) {
+      const name = getDefaultCompanionName();
+      await db
+        .update(companions)
+        .set({ companionName: name })
+        .where(eq(companions.id, companion.id));
+      companion = { ...companion, companionName: name };
     }
 
     const session = await getSession();
