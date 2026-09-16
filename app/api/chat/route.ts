@@ -114,7 +114,7 @@ export async function POST(request: Request) {
     .select({ role: chatMessages.role, content: chatMessages.content })
     .from(chatMessages)
     .where(eq(chatMessages.companionId, companion.id))
-    .orderBy(desc(chatMessages.createdAt))
+    .orderBy(desc(chatMessages.seq))
     .limit(RECENT_LIMIT);
   const recent = recentDesc.reverse().map((m) => ({
     role: m.role as "user" | "companion",

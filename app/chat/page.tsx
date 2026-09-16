@@ -39,11 +39,18 @@ export default function ChatPage() {
           <div className="relative">
             <button
               onClick={() => setPanelOpen((v) => !v)}
-              className="font-semibold tracking-[-0.02em] transition hover:opacity-70"
+              className="-ml-3 flex items-center gap-2 rounded-full px-3 py-1.5 font-semibold tracking-[-0.02em] transition hover:bg-white/5"
               aria-haspopup="dialog"
               aria-expanded={panelOpen}
+              aria-label="Companion profile"
             >
               {profile?.companion_name ?? "Echo"}
+              <span
+                aria-hidden
+                className={`text-xs text-echo-muted transition-transform ${panelOpen ? "rotate-180" : ""}`}
+              >
+                ▼
+              </span>
             </button>
             {panelOpen && (
               <div className="absolute left-0 top-full z-50 mt-3">

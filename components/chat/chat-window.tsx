@@ -10,8 +10,23 @@ import { CompanionContent } from "./message-content";
 // Phase 9 tinggal hook memory regen setelah stream selesai — bubble tak berubah.
 
 interface ChatMessage {
+  id: string;
   role: "user" | "companion";
   content: string;
+}
+
+interface HistoryRow {
+  id?: unknown;
+  role?: unknown;
+  content?: unknown;
+}
+
+// ponytail: baris history valid = id string + role dikenal + content string.
+function toChatMessage(m: HistoryRow): ChatMessage | null {
+  if (typeof m.id !== "string") return null;
+  if (m.role !== "user" && m.role !== "companion") return null;
+  if (typeof m.content !== "string") return null;
+  return { id: m.id, role: m.role, content: m.content };
 }
 
 export function ChatWindow() {
@@ -20,9 +35,18 @@ export function ChatWindow() {
   const [sending, setSending] = useState(false);
   const [streamed, setStreamed] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // ponytail: Phase 2 infinite scroll — cursor di ref (baca fresh di observer),
+  // cermin state untuk render. stick = user di dekat bawah → auto-scroll aman.
+  const listRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+  const cursorRef = useRef<string | null>(null);
+  const loadingRef = useRef(false);
+  const stickRef = useRef(true);
 
   const tooLong = draft.length > MAX_MESSAGE_LENGTH;
 
@@ -41,20 +65,24 @@ export function ChatWindow() {
     }
   }
 
-  // ponytail: history dimuat sekali saat mount (Phase 7). Gagal = empty state,
+  // ponytail: halaman pertama (50 terbaru) saat mount. Gagal = empty state,
   // bukan error fatal — user tetap bisa kirim pesan baru.
   useEffect(() => {
     let cancelled = false;
     fetch("/api/chat/history", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : { messages: [] }))
       .then((data) => {
-        if (!cancelled && Array.isArray(data.messages)) {
-          setMessages(
-            data.messages.filter(
-              (m: ChatMessage) => m.role === "user" || m.role === "companion"
-            )
-          );
+        if (cancelled) return;
+        if (Array.isArray(data.messages)) {
+          const rows = (data.messages as HistoryRow[])
+            .map(toChatMessage)
+            .filter((m): m is ChatMessage => m !== null);
+          setMessages(rows);
         }
+        const cursor =
+          typeof data.nextCursor === "string" ? data.nextCursor : null;
+        cursorRef.current = cursor;
+        setHasMoreHistory(cursor !== null);
       })
       .catch(() => {})
       .finally(() => {
@@ -65,6 +93,65 @@ export function ChatWindow() {
     };
   }, []);
 
+  // ponytail: halaman lama prepend di atas. Kunci anti-lompat: selisih
+  // scrollHeight dikembalikan setelah render via rAF.
+  const loadOlder = useCallback(async () => {
+    if (loadingRef.current || cursorRef.current == null) return;
+    loadingRef.current = true;
+    setLoadingMore(true);
+    try {
+      const el = listRef.current;
+      const prevH = el ? el.scrollHeight : 0;
+      const res = await fetch(
+        `/api/chat/history?cursor=${encodeURIComponent(cursorRef.current)}`,
+        { cache: "no-store" }
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data.messages)) {
+        const incoming = (data.messages as HistoryRow[])
+          .map(toChatMessage)
+          .filter((m): m is ChatMessage => m !== null);
+        if (incoming.length > 0) {
+          setMessages((m) => {
+            const seen = new Set(m.map((x) => x.id));
+            return [...incoming.filter((x) => !seen.has(x.id)), ...m];
+          });
+        }
+      }
+      const cursor =
+        typeof data.nextCursor === "string" ? data.nextCursor : null;
+      cursorRef.current = cursor;
+      setHasMoreHistory(cursor !== null);
+      requestAnimationFrame(() => {
+        if (el) el.scrollTop += el.scrollHeight - prevH;
+      });
+    } catch {
+      // ponytail: gagal muat halaman lama = diam, sentinel coba lagi
+      // saat terlihat berikutnya. Bukan error fatal.
+    } finally {
+      loadingRef.current = false;
+      setLoadingMore(false);
+    }
+  }, []);
+
+  // ponytail: sentinel di atas list — terlihat = muat halaman lama.
+  // Konten lebih pendek dari viewport = otomatis terisi sampai penuh/habis.
+  useEffect(() => {
+    if (loadingHistory) return;
+    const sentinel = topRef.current;
+    const root = listRef.current;
+    if (!sentinel || !root) return;
+    const ob = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) void loadOlder();
+      },
+      { root }
+    );
+    ob.observe(sentinel);
+    return () => ob.disconnect();
+  }, [loadingHistory, loadOlder]);
+
   // ponytail: pola yang sama dengan GradientLink landing — glow ikuti kursor.
   const trackCursor = useCallback((e: MouseEvent<HTMLElement>) => {
     const el = e.currentTarget;
@@ -73,8 +160,16 @@ export function ChatWindow() {
     el.style.setProperty("--my", `${e.clientY - rect.top}px`);
   }, []);
 
+  // ponytail: auto-scroll hanya saat user menempel di bawah (stick).
+  // Prepend history di atas tidak boleh menyentak viewport ke bawah.
+  function handleListScroll() {
+    const el = listRef.current;
+    if (!el) return;
+    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (stickRef.current) bottomRef.current?.scrollIntoView();
   }, [messages, sending]);
 
   async function handleSend() {
@@ -89,7 +184,10 @@ export function ChatWindow() {
     if (inputRef.current) inputRef.current.style.height = "auto";
     setError(null);
     setStreamed(false);
-    setMessages((m) => [...m, { role: "user", content: message }]);
+    setMessages((m) => [
+      ...m,
+      { id: crypto.randomUUID(), role: "user", content: message },
+    ]);
     setSending(true);
     try {
       const res = await fetch("/api/chat", {
@@ -103,7 +201,10 @@ export function ChatWindow() {
         throw new Error(data?.error?.message ?? "Send failed.");
       }
       // Bubble companion dibuat kosong duluan — delta pertama tinggal isi.
-      setMessages((m) => [...m, { role: "companion", content: "" }]);
+      setMessages((m) => [
+        ...m,
+        { id: crypto.randomUUID(), role: "companion", content: "" },
+      ]);
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = "";
@@ -127,7 +228,12 @@ export function ChatWindow() {
               setStreamed(true);
               setMessages((m) => {
                 const next = [...m];
-                next[next.length - 1] = { role: "companion", content: snapshot };
+                const prev = next[next.length - 1];
+                next[next.length - 1] = {
+                  id: prev?.id ?? crypto.randomUUID(),
+                  role: "companion",
+                  content: snapshot,
+                };
                 return next;
               });
             } else {
@@ -154,7 +260,22 @@ export function ChatWindow() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mx-auto flex w-full max-w-[68rem] flex-1 flex-col space-y-4 overflow-y-auto px-5 py-6">
+      <div
+        ref={listRef}
+        onScroll={handleListScroll}
+        className="mx-auto flex w-full max-w-[68rem] flex-1 flex-col space-y-4 overflow-y-auto px-5 py-6"
+      >
+        <div ref={topRef} aria-hidden />
+        {loadingMore && (
+          <p className="animate-pulse text-center text-xs text-echo-muted/60">
+            Loading older messages…
+          </p>
+        )}
+        {!loadingHistory && !hasMoreHistory && messages.length > 0 && (
+          <p className="text-center text-xs text-echo-muted/40">
+            Beginning of conversation
+          </p>
+        )}
         {loadingHistory && (
           <p className="animate-pulse pt-16 text-center text-sm text-echo-muted/60">
             Loading history…
@@ -174,9 +295,9 @@ export function ChatWindow() {
             </p>
           </div>
         )}
-        {messages.map((m, i) => (
+        {messages.map((m) => (
           <div
-            key={i}
+            key={m.id}
             className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
           >
             {m.role === "user" ? (

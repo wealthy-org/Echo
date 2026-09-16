@@ -44,6 +44,9 @@ export const chatMessages = pgTable(
     companionId: uuid("companion_id")
       .notNull()
       .references(() => companions.id, { onDelete: "cascade" }),
+    // ponytail: urutan total insert. createdAt kembar per pasang (now() per
+    // transaksi) + tiebreak id acak = urutan flip habis refresh. seq menutupnya.
+    seq: integer("seq").generatedAlwaysAsIdentity(),
     role: text("role").notNull(),
     content: text("content").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
