@@ -1,0 +1,1 @@
+ALTER TABLE "companions" ADD COLUMN "messages_since_summary" integer DEFAULT 0 NOT NULL;

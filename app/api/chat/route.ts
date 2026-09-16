@@ -3,9 +3,12 @@ import { desc, eq } from "drizzle-orm";
 import { chatMessages, companions } from "../../../db/schema";
 import { db } from "../../../lib/db";
 import { getSession } from "../../../lib/auth/session";
-import { buildChatPrompt } from "../../../lib/llm/prompt";
-import { completeChatStream } from "../../../lib/llm/openrouter";
-import { MAX_MESSAGE_LENGTH } from "../../../lib/chat/constants";
+import { buildChatPrompt, buildSummaryPrompt } from "../../../lib/llm/prompt";
+import { completeChat, completeChatStream } from "../../../lib/llm/openrouter";
+import {
+  MAX_MESSAGE_LENGTH,
+  MEMORY_REGEN_THRESHOLD,
+} from "../../../lib/chat/constants";
 
 // ponytail: SSE Phase 8 — `data: <delta-json>` per chunk, `data: [DONE]` tutup,
 // `data: {"error": "..."}` gagal tengah jalan. Simpan ke DB SETELAH stream
@@ -77,6 +80,8 @@ export async function POST(request: Request) {
         }
         // ponytail: persist setelah complete — stream putus = tidak ada yang
         // tersimpan (parsial tidak ditampilkan ulang saat refresh, jujur).
+        // ponytail: +1 per turn — hanya pesan user yang dihitung (PRD §15).
+        const newSince = companion.messagesSinceSummary + 1;
         await db.transaction(async (tx) => {
           await tx.insert(chatMessages).values([
             { companionId: companion.id, role: "user", content: trimmed },
@@ -84,10 +89,33 @@ export async function POST(request: Request) {
           ]);
           await tx
             .update(companions)
-            .set({ messageCount: companion.messageCount + 2 })
+            .set({
+              messageCount: companion.messageCount + 2,
+              messagesSinceSummary: newSince,
+            })
             .where(eq(companions.id, companion.id));
         });
         send("[DONE]");
+        // ponytail: opsi A — regen setelah [DONE] terkirim (balasan sudah di
+        // user), sebelum stream ditutup. Gagal regen tidak menggagalkan chat;
+        // counter tetap naik sehingga dicoba lagi di turn berikut.
+        if (newSince >= MEMORY_REGEN_THRESHOLD) {
+          try {
+            const summary = await completeChat(
+              buildSummaryPrompt(companion.memorySummary, [
+                ...recent,
+                { role: "user", content: trimmed },
+                { role: "companion", content: full },
+              ])
+            );
+            await db
+              .update(companions)
+              .set({ memorySummary: summary, messagesSinceSummary: 0 })
+              .where(eq(companions.id, companion.id));
+          } catch (e) {
+            console.error("memory regen failed:", e);
+          }
+        }
       } catch (e) {
         console.error("chat stream failed:", e);
         send(

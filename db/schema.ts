@@ -17,6 +17,11 @@ export const companions = pgTable(
     companionName: text("companion_name").notNull().default("Companion"),
     memorySummary: text("memory_summary").notNull().default(""),
     messageCount: integer("message_count").notNull().default(0),
+    // ponytail: Phase 9 — penghitung pesan user sejak summary terakhir;
+    // trigger regen memorySummary tiap 20 (PRD §15). Bukan duplikat memory.
+    messagesSinceSummary: integer("messages_since_summary")
+      .notNull()
+      .default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

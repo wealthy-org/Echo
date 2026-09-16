@@ -41,3 +41,30 @@ export function buildChatPrompt(
   messages.push({ role: "user", content: currentMessage });
   return messages;
 }
+
+// ponytail: Phase 9 — prompt ringkas terpisah (PRD §15/§27). Ambil recent yang
+// SAMA dengan chat prompt agar summary konsisten dengan konteks yang dilihat user.
+export function buildSummaryPrompt(
+  previousSummary: string,
+  recent: { role: "user" | "companion"; content: string }[]
+): PromptMessage[] {
+  const convo = recent
+    .map((m) => `${m.role === "user" ? "User" : "Companion"}: ${m.content}`)
+    .join("\n");
+  const previous = previousSummary.trim()
+    ? `Previous summary:\n${previousSummary}\n\n`
+    : "No previous summary — this is the first one.\n\n";
+  return [
+    {
+      role: "system",
+      content:
+        "Summarize the conversation below into a concise memory for a personal AI companion. " +
+        "Keep durable facts, preferences, and open threads; drop greetings and small talk. " +
+        "Reply with the summary text only, no preamble.",
+    },
+    {
+      role: "user",
+      content: `${previous}Recent conversation:\n${convo}`,
+    },
+  ];
+}

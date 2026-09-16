@@ -24,7 +24,7 @@ export async function POST() {
         .where(eq(chatMessages.companionId, companionId));
       await tx
         .update(companions)
-        .set({ memorySummary: "", messageCount: 0 })
+        .set({ memorySummary: "", messageCount: 0, messagesSinceSummary: 0 })
         .where(eq(companions.id, companionId));
     });
   } catch (e) {
