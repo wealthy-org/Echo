@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, desc, eq, gt, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { chatMessages, companions } from "../../../db/schema";
 import { db } from "../../../lib/db";
 import { getSession } from "../../../lib/auth/session";
@@ -7,6 +7,8 @@ import { buildChatPrompt, buildSummaryPrompt } from "../../../lib/llm/prompt";
 import { completeChat, completeChatStream } from "../../../lib/llm/openrouter";
 import {
   CHAT_RATE_LIMIT_COUNT,
+  CHAT_RATE_LIMIT_DAILY_COUNT,
+  CHAT_RATE_LIMIT_DAY_MS,
   CHAT_RATE_LIMIT_WINDOW_MS,
   MAX_MESSAGE_LENGTH,
   MEMORY_REGEN_THRESHOLD,
@@ -55,36 +57,53 @@ export async function POST(request: Request) {
     return err("NOT_FOUND", "Companion not found.", 404);
   }
 
-  // ponytail: Phase 11 — cek SEBELUM LLM call agar request ditolak tidak
+  // ponytail: Phase 11 / FR-11 — 10/menit + 100/hari per companion, 1 query
+  // dengan 2 agregat FILTER. Cek SEBELUM LLM call agar request ditolak tidak
   // membakar kuota. 429 tidak menyimpan apa pun (counter memory ikut aman).
-  const windowStart = new Date(Date.now() - CHAT_RATE_LIMIT_WINDOW_MS);
-  const [{ n, oldest }] = await db
+  const minuteStart = new Date(Date.now() - CHAT_RATE_LIMIT_WINDOW_MS);
+  const dayStart = new Date(Date.now() - CHAT_RATE_LIMIT_DAY_MS);
+  const [usage] = await db
     .select({
-      n: sql<number>`count(*)::int`,
-      oldest: sql<Date | null>`min(${chatMessages.createdAt})`,
+      perMinute: sql<number>`count(*) filter (where ${chatMessages.createdAt} > ${minuteStart})::int`,
+      perDay: sql<number>`count(*) filter (where ${chatMessages.createdAt} > ${dayStart})::int`,
+      oldestMinute: sql<Date | null>`min(${chatMessages.createdAt}) filter (where ${chatMessages.createdAt} > ${minuteStart})`,
+      oldestDay: sql<Date | null>`min(${chatMessages.createdAt}) filter (where ${chatMessages.createdAt} > ${dayStart})`,
     })
     .from(chatMessages)
     .where(
       and(
         eq(chatMessages.companionId, companion.id),
-        eq(chatMessages.role, "user"),
-        gt(chatMessages.createdAt, windowStart)
+        eq(chatMessages.role, "user")
       )
     );
-  if (n >= CHAT_RATE_LIMIT_COUNT) {
-    const retryAfter = oldest
+  const limited =
+    usage.perMinute >= CHAT_RATE_LIMIT_COUNT
+      ? {
+          windowMs: CHAT_RATE_LIMIT_WINDOW_MS,
+          oldest: usage.oldestMinute,
+          message: "Too many messages. Please wait a minute and try again.",
+        }
+      : usage.perDay >= CHAT_RATE_LIMIT_DAILY_COUNT
+        ? {
+            windowMs: CHAT_RATE_LIMIT_DAY_MS,
+            oldest: usage.oldestDay,
+            message: "Daily message limit reached. Please try again tomorrow.",
+          }
+        : null;
+  if (limited) {
+    const retryAfter = limited.oldest
       ? Math.max(
           1,
           Math.ceil(
-            (oldest.getTime() + CHAT_RATE_LIMIT_WINDOW_MS - Date.now()) / 1000
+            (limited.oldest.getTime() + limited.windowMs - Date.now()) / 1000
           )
         )
-      : Math.ceil(CHAT_RATE_LIMIT_WINDOW_MS / 1000);
+      : Math.ceil(limited.windowMs / 1000);
     return NextResponse.json(
       {
         error: {
           code: "RATE_LIMITED",
-          message: "Too many messages. Please wait a few minutes and try again.",
+          message: limited.message,
         },
       },
       { status: 429, headers: { "retry-after": String(retryAfter) } }

@@ -59,7 +59,7 @@ export default function Home() {
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
               <ConnectButton
-                connectLabel="Connect Wallet →"
+                connectLabel="Sign in →"
                 className="flex items-center gap-2 rounded-full px-6 py-3.5 text-sm font-medium text-white"
               />
               <GradientLink
@@ -133,7 +133,7 @@ export default function Home() {
               is created automatically for new wallets.
             </p>
             <ConnectButton
-              connectLabel="Start a conversation →"
+              connectLabel="Sign in to chat →"
               className="mt-8 inline-flex items-center gap-2 rounded-full px-7 py-4 text-sm font-medium text-white"
             />
           </div>
