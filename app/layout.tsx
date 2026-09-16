@@ -11,7 +11,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Echo — Wallet AI Companion",
   description:
-    "Satu wallet, satu AI companion pribadi. Connect Phantom, mulai ngobrol.",
+    "One wallet, one personal AI companion. Connect Phantom, start chatting.",
 };
 
 export const viewport = {

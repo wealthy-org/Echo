@@ -167,10 +167,10 @@ export function ChatWindow() {
               Companion online
             </div>
             <p className="max-w-md text-2xl font-semibold tracking-[-0.02em] text-white">
-              Mulai ngobrol dengan companion-mu.
+              Start chatting with your companion.
             </p>
             <p className="mt-3 max-w-sm text-sm leading-6 text-echo-muted/60">
-              Satu wallet, satu companion pribadi yang mengingat konteksmu.
+              One wallet, one personal companion that remembers your context.
             </p>
           </div>
         )}
@@ -193,7 +193,7 @@ export function ChatWindow() {
         {sending && !streamed && (
           <div className="flex justify-start">
             <p className="animate-pulse rounded-3xl border border-white/10 bg-echo-card px-5 py-3 text-sm text-echo-muted/60">
-              Echo mengetik…
+              Echo is typing…
             </p>
           </div>
         )}
@@ -229,7 +229,7 @@ export function ChatWindow() {
               autoresize();
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Message… (Enter kirim, Shift+Enter baris baru)"
+            placeholder="Message… (Enter to send, Shift+Enter for new line)"
             aria-label="Chat message"
             className="max-h-40 min-w-0 flex-1 resize-none overflow-y-auto rounded-3xl border border-white/10 bg-echo-card px-5 py-3 text-sm leading-6 text-white placeholder:text-white/30 focus:border-white/40 focus:outline-none"
           />

@@ -6,15 +6,15 @@ import { ConnectButton } from "../components/wallet/connect-button";
 const STEPS = [
   {
     title: "Connect Phantom",
-    description: "Sambungkan wallet Phantom — tanpa bikin akun, tanpa username/password.",
+    description: "Connect your Phantom wallet — no account, no username/password.",
   },
   {
     title: "Sign message",
-    description: "Tanda tangani pesan sekali untuk membuktikan wallet ini milikmu.",
+    description: "Sign one message to prove this wallet is yours.",
   },
   {
     title: "Chat",
-    description: "Ngobrol dengan companion yang mengingat konteks percakapanmu.",
+    description: "Chat with a companion that remembers your conversation context.",
   },
 ];
 
@@ -47,16 +47,15 @@ export default function Home() {
               Wallet AI Companion
             </div>
             <h1 className="max-w-5xl text-5xl font-semibold leading-[1.02] tracking-[-0.045em] text-white sm:text-6xl md:text-7xl lg:text-8xl">
-              Satu wallet, satu{" "}
+              One wallet, one personal{" "}
               <span className="bg-gradient-to-r from-[#f1b29e] via-[#b354fe] to-[#77e7ff] bg-clip-text text-transparent">
-                companion
-              </span>{" "}
-              pribadi.
+                companion.
+              </span>
             </h1>
             <p className="mt-8 max-w-2xl text-base leading-7 text-[#c3c6cd]/70 sm:text-lg">
-              Connect Phantom wallet, companion kamu langsung tersedia. Ngobrol
-              tanpa bikin akun baru — dia mengingat konteks penting dari
-              percakapan sebelumnya.
+              Connect your Phantom wallet and your companion is ready. Chat
+              with no new account — it remembers what matters from past
+              conversations.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
               <ConnectButton
@@ -71,7 +70,7 @@ export default function Home() {
               </GradientLink>
             </div>
             <p className="mt-5 text-xs text-white/40">
-              Phantom EVM · Robinhood Testnet (46630) · tanpa username / password
+              Phantom EVM · Robinhood Testnet (46630) · no username / password
             </p>
           </div>
         </div>
@@ -85,9 +84,9 @@ export default function Home() {
         <SectionHeading
           eyebrow="Concept"
           accent="text-[#77e7ff]"
-          title="Bukan chatbot publik."
-          muted="Milik dompetmu."
-          description="Wallet adalah identitasmu. Setiap wallet punya satu companion yang menyimpan history dan membangun memory agar terasa mengenalmu."
+          title="Not a public chatbot."
+          muted="Owned by your wallet."
+          description="Your wallet is your identity. Each wallet gets one companion that keeps history and builds memory, so it feels like it knows you."
         />
       </section>
 
@@ -100,12 +99,12 @@ export default function Home() {
                 How it works
               </div>
               <h2 className="text-4xl font-semibold tracking-[-0.035em] text-white sm:text-5xl">
-                Connect. <span className="text-white/40">Sign. Ngobrol.</span>
+                Connect. <span className="text-white/40">Sign. Chat.</span>
               </h2>
             </div>
             <p className="max-w-sm text-sm leading-6 text-[#c3c6cd]/50">
-              Onboarding cepat tanpa akun. Verifikasi signature menjaga companion-mu
-              tetap milikmu.
+              Fast onboarding with no account. Signature verification keeps
+              your companion yours.
             </p>
           </div>
           <div className="grid gap-4 lg:grid-cols-3">
@@ -124,14 +123,14 @@ export default function Home() {
               Ready?
             </div>
             <h2 className="text-5xl font-semibold leading-[1.02] tracking-[-0.045em] text-white sm:text-6xl lg:text-7xl">
-              Temui{" "}
+              Meet your{" "}
               <span className="bg-gradient-to-r from-[#f1b29e] via-[#b354fe] to-[#77e7ff] bg-clip-text text-transparent">
-                companion-mu.
+                companion.
               </span>
             </h2>
             <p className="mt-7 max-w-xl text-base leading-7 text-[#c3c6cd]/60">
-              Connect wallet dan mulai percakapan pertama. Companion dibuat
-              otomatis untuk wallet baru.
+              Connect your wallet and start your first conversation. A companion
+              is created automatically for new wallets.
             </p>
             <ConnectButton
               connectLabel="Start a conversation →"
