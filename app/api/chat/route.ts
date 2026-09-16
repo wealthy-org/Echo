@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { chatMessages, companions } from "../../../db/schema";
 import { db } from "../../../lib/db";
 import { getSession } from "../../../lib/auth/session";
 import { buildChatPrompt, buildSummaryPrompt } from "../../../lib/llm/prompt";
 import { completeChat, completeChatStream } from "../../../lib/llm/openrouter";
 import {
+  CHAT_RATE_LIMIT_COUNT,
+  CHAT_RATE_LIMIT_WINDOW_MS,
   MAX_MESSAGE_LENGTH,
   MEMORY_REGEN_THRESHOLD,
 } from "../../../lib/chat/constants";
@@ -51,6 +53,42 @@ export async function POST(request: Request) {
     .limit(1);
   if (!companion) {
     return err("NOT_FOUND", "Companion not found.", 404);
+  }
+
+  // ponytail: Phase 11 — cek SEBELUM LLM call agar request ditolak tidak
+  // membakar kuota. 429 tidak menyimpan apa pun (counter memory ikut aman).
+  const windowStart = new Date(Date.now() - CHAT_RATE_LIMIT_WINDOW_MS);
+  const [{ n, oldest }] = await db
+    .select({
+      n: sql<number>`count(*)::int`,
+      oldest: sql<Date | null>`min(${chatMessages.createdAt})`,
+    })
+    .from(chatMessages)
+    .where(
+      and(
+        eq(chatMessages.companionId, companion.id),
+        eq(chatMessages.role, "user"),
+        gt(chatMessages.createdAt, windowStart)
+      )
+    );
+  if (n >= CHAT_RATE_LIMIT_COUNT) {
+    const retryAfter = oldest
+      ? Math.max(
+          1,
+          Math.ceil(
+            (oldest.getTime() + CHAT_RATE_LIMIT_WINDOW_MS - Date.now()) / 1000
+          )
+        )
+      : Math.ceil(CHAT_RATE_LIMIT_WINDOW_MS / 1000);
+    return NextResponse.json(
+      {
+        error: {
+          code: "RATE_LIMITED",
+          message: "Too many messages. Please wait a few minutes and try again.",
+        },
+      },
+      { status: 429, headers: { "retry-after": String(retryAfter) } }
+    );
   }
 
   const recentDesc = await db
