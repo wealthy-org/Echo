@@ -58,7 +58,7 @@ export default function ChatPage() {
               </div>
             )}
           </div>
-          <ConnectButton />
+          <ConnectButton showChatLink={false} />
         </div>
       </header>
       <section className="flex min-h-0 flex-1 flex-col">

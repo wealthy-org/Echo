@@ -56,6 +56,7 @@ export function MobileMenu() {
             ))}
             <ConnectButton
               onAction={() => setOpen(false)}
+              showAddress={false}
               className="mt-2 flex items-center justify-center rounded-full px-5 py-3 text-white"
             />
           </nav>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   useAccount,
   useChainId,
@@ -14,6 +15,11 @@ import { appChain } from "../../lib/wallet/chains";
 import { wagmiConfig } from "../../lib/wallet/config";
 import { buildAuthMessage } from "../../lib/auth/message";
 import { useSession } from "./use-session";
+import { useCompanion } from "../companion/use-companion";
+import {
+  REDIRECTING_EVENT,
+  REDIRECT_DONE_EVENT,
+} from "./redirect-overlay";
 
 // ponytail: 1 tombol, 1 klik: connect → (switch) → sign → /chat.
 // Tanpa copy "Install" — wallet tak terdeteksi = alert (+ deep-link di mobile).
@@ -51,10 +57,16 @@ function handleMissingWallet() {
 export function ConnectButton({
   className = "",
   connectLabel = "Sign in",
+  showChatLink = true,
+  // ponytail: landing sembunyikan address (nama companion + Open chat cukup);
+  // halaman chat tetap tampil address.
+  showAddress = true,
   onAction,
 }: {
   className?: string;
   connectLabel?: string;
+  showChatLink?: boolean;
+  showAddress?: boolean;
   onAction?: () => void;
 }) {
   const { address, isConnected, status } = useAccount();
@@ -73,6 +85,7 @@ export function ConnectButton({
   } = useSwitchChain();
   const { signMessageAsync, isPending: isSigning } = useSignMessage();
   const { session, isLoading: isSessionLoading, refresh } = useSession();
+  const { profile } = useCompanion();
   const router = useRouter();
   const [flowError, setFlowError] = useState<string | null>(null);
 
@@ -143,8 +156,12 @@ export function ConnectButton({
       const data = await res.json();
       if (!res.ok) {
         setFlowError(data?.error?.message ?? "Sign in failed.");
+        window.dispatchEvent(new Event(REDIRECT_DONE_EVENT));
         return;
       }
+      // ponytail: overlay global (bukan state lokal) — selamat dari unmount
+      // saat klik berasal dari mobile menu yang langsung menutup.
+      window.dispatchEvent(new Event(REDIRECTING_EVENT));
       await refresh();
       // ponytail: push gantikan reload — session cookie sudah tersimpan,
       // /chat baca ulang via useSession. Tanpa reload = tanpa flicker wallet reconnect.
@@ -152,6 +169,7 @@ export function ConnectButton({
     } catch (e) {
       // ponytail: error asli ke console — label cukup user-friendly.
       console.error("wallet sign-in failed:", e);
+      window.dispatchEvent(new Event(REDIRECT_DONE_EVENT));
       const msg = (e as Error)?.message ?? "";
       setFlowError(
         /reject|denied|cancel/i.test(msg)
@@ -171,19 +189,28 @@ export function ConnectButton({
   if (signedIn) {
     return (
       <span className="inline-flex items-center gap-2">
-        <span className="rounded-full border border-white/15 px-4 py-2 text-sm text-white">
-          {address ? shortAddress(address) : "Connected"}
-        </span>
+        {showChatLink && (
+          <Link
+            href="/chat"
+            onClick={() => onAction?.()}
+            className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-white transition hover:border-white/40"
+          >
+            Open chat →
+          </Link>
+        )}
+        {/* <span className="rounded-full border border-white/15 px-4 py-2 text-sm text-white">
+          {showAddress || !profile
+            ? address
+              ? shortAddress(address)
+              : "Connected"
+            : profile.companion_name}
+        </span> */}
         <button
           type="button"
-          aria-label="Disconnect wallet"
-          title="Disconnect"
           onClick={() => void handleDisconnect()}
-          className="gradient-button flex h-8 w-8 items-center justify-center rounded-full text-white"
+          className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/70 transition hover:border-red-400/60 hover:text-red-300"
         >
-          <span aria-hidden className="text-base leading-none">
-            ×
-          </span>
+          Logout
         </button>
       </span>
     );

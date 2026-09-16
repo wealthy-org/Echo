@@ -1,6 +1,8 @@
 // ponytail: landing statis + 1 pulau client (interactive.tsx). CTA connect via ConnectButton (Phase 3).
+import Image from "next/image";
 import { GradientLink, MobileMenu } from "../components/landing/interactive";
 import { DesktopNav, SectionHeading, StepCard } from "../components/landing/section";
+import { HeroActions } from "../components/landing/hero-actions";
 import { ConnectButton } from "../components/wallet/connect-button";
 
 const STEPS = [
@@ -27,9 +29,13 @@ export default function Home() {
       <header className="sticky top-0 z-50 bg-black/75 backdrop-blur-xl border-b border-white/10">
         <div className="relative mx-auto flex h-[72px] max-w-[68rem] items-center justify-between px-5 lg:px-0">
           <a href="#" className="flex items-center gap-2 text-white">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0038ff] text-sm font-bold">
-              E
-            </span>
+            <Image
+              src="/echo-no-bg.png"
+              alt="Echo"
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded-lg object-contain"
+            />
             <span className="font-semibold tracking-tight">Echo</span>
           </a>
           <DesktopNav />
@@ -57,18 +63,7 @@ export default function Home() {
               with no new account — it remembers what matters from past
               conversations.
             </p>
-            <div className="mt-9 flex flex-wrap gap-3">
-              <ConnectButton
-                connectLabel="Sign in →"
-                className="flex items-center gap-2 rounded-full px-6 py-3.5 text-sm font-medium text-white"
-              />
-              <GradientLink
-                href="#concept"
-                className="flex items-center gap-2 rounded-full px-6 py-3.5 text-sm"
-              >
-                <span>Explore Echo</span>
-              </GradientLink>
-            </div>
+            <HeroActions />
             <p className="mt-5 text-xs text-white/40">
               Phantom EVM · Robinhood Testnet (46630) · no username / password
             </p>
@@ -134,6 +129,7 @@ export default function Home() {
             </p>
             <ConnectButton
               connectLabel="Sign in to chat →"
+              showAddress={false}
               className="mt-8 inline-flex items-center gap-2 rounded-full px-7 py-4 text-sm font-medium text-white"
             />
           </div>

@@ -58,7 +58,7 @@ export function DesktopNav() {
           {n.label}
         </a>
       ))}
-      <ConnectButton className="rounded-full px-5 py-2.5 text-[13px] text-white" />
+      <ConnectButton className="rounded-full px-5 py-2.5 text-[13px] text-white" showAddress={false} />
     </nav>
   );
 }

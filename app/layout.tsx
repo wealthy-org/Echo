@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Inter } from "next/font/google";
 import { WalletProviders } from "../components/wallet/providers";
+import { RedirectOverlay } from "../components/wallet/redirect-overlay";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -12,6 +13,10 @@ export const metadata: Metadata = {
   title: "Echo — Wallet AI Companion",
   description:
     "One wallet, one personal AI companion. Connect Phantom, start chatting.",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export const viewport = {
@@ -26,7 +31,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
-        <WalletProviders>{children}</WalletProviders>
+        <WalletProviders>
+          {children}
+          <RedirectOverlay />
+        </WalletProviders>
       </body>
     </html>
   );
