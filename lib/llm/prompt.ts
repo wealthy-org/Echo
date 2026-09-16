@@ -1,5 +1,10 @@
 // Server-only — jangan import dari client component.
-// Prompt ikut PRD §27: system + memory + recent + current.
+// Prompt ikut PRD §27: system + personality + memory + recent + current.
+
+import {
+  DEFAULT_PERSONALITY,
+  PERSONALITY_PRESETS,
+} from "../companion/constants";
 
 export interface PromptMessage {
   role: "system" | "user" | "assistant";
@@ -20,9 +25,19 @@ Do not present speculative financial information as certainty.`;
 export function buildChatPrompt(
   memorySummary: string,
   recent: { role: "user" | "companion"; content: string }[],
-  currentMessage: string
+  currentMessage: string,
+  // ponytail: Phase 2 — slug preset ATAU teks custom user. Undefined (kolom
+  // belum migrasi) = default. Custom disuntik mentah, sudah divalidasi di PATCH.
+  personality?: string | null
 ): PromptMessage[] {
   const messages: PromptMessage[] = [{ role: "system", content: SYSTEM_PROMPT }];
+
+  const raw = (personality ?? DEFAULT_PERSONALITY).trim() || DEFAULT_PERSONALITY;
+  const preset = PERSONALITY_PRESETS.find((p) => p.id === raw);
+  messages.push({
+    role: "system",
+    content: `TONE\n${preset ? preset.instruction : raw}`,
+  });
 
   if (memorySummary.trim()) {
     messages.push({

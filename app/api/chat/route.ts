@@ -122,7 +122,12 @@ export async function POST(request: Request) {
   }));
 
   const trimmed = message.trim();
-  const prompt = buildChatPrompt(companion.memorySummary, recent, trimmed);
+  const prompt = buildChatPrompt(
+    companion.memorySummary,
+    recent,
+    trimmed,
+    companion.personality
+  );
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({

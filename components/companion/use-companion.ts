@@ -9,6 +9,7 @@ export interface CompanionProfile {
   wallet_address: string;
   created_at: string;
   total_message_count: number;
+  personality: string;
 }
 
 async function fetchCompanion(): Promise<CompanionProfile> {
@@ -25,6 +26,19 @@ async function renameCompanion(name: string): Promise<CompanionProfile> {
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.error?.message ?? "Rename failed.");
+  return data as CompanionProfile;
+}
+
+async function updatePersonality(
+  personality: string
+): Promise<CompanionProfile> {
+  const res = await fetch("/api/companion", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ personality }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error?.message ?? "Update failed.");
   return data as CompanionProfile;
 }
 
@@ -49,11 +63,16 @@ export function useCompanion() {
 
   const rename = useMutation({ mutationFn: renameCompanion, onSuccess: invalidate });
   const reset = useMutation({ mutationFn: resetCompanion, onSuccess: invalidate });
+  const personality = useMutation({
+    mutationFn: updatePersonality,
+    onSuccess: invalidate,
+  });
 
   return {
     profile: query.data ?? null,
     isLoading: query.isLoading,
     rename,
     reset,
+    personality,
   };
 }

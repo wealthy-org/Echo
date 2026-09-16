@@ -3,7 +3,12 @@ import { eq } from "drizzle-orm";
 import { companions } from "../../../db/schema";
 import { db } from "../../../lib/db";
 import { getSession } from "../../../lib/auth/session";
-import { MAX_COMPANION_NAME_LENGTH } from "../../../lib/companion/constants";
+import {
+  DEFAULT_PERSONALITY,
+  MAX_COMPANION_NAME_LENGTH,
+  MAX_CUSTOM_TONE_LENGTH,
+  isPresetId,
+} from "../../../lib/companion/constants";
 
 // ponytail: kolom DB message_count di-map ke total_message_count agar API ikut PRD FR-08
 // tanpa rename kolom. created_at ikut terserialisasi ISO otomatis.
@@ -17,6 +22,8 @@ function toProfile(c: CompanionRow) {
     wallet_address: c.walletAddress,
     created_at: c.createdAt,
     total_message_count: c.messageCount,
+    // ponytail: ?? default untuk baris sebelum migrasi personality.
+    personality: c.personality ?? DEFAULT_PERSONALITY,
   };
 }
 
@@ -56,24 +63,55 @@ export async function PATCH(request: Request) {
   } catch {
     return err("VALIDATION_ERROR", "Invalid JSON body.", 400);
   }
-  const { name } = (body ?? {}) as { name?: unknown };
-  const trimmed = typeof name === "string" ? name.trim() : "";
-  if (!trimmed) {
-    return err("VALIDATION_ERROR", "Companion name must not be empty.", 400);
+  const { name, personality } = (body ?? {}) as {
+    name?: unknown;
+    personality?: unknown;
+  };
+
+  // ponytail: name & personality independen — boleh salah satu atau keduanya.
+  const set: { companionName?: string; personality?: string } = {};
+
+  if (name !== undefined) {
+    const trimmed = typeof name === "string" ? name.trim() : "";
+    if (!trimmed) {
+      return err("VALIDATION_ERROR", "Companion name must not be empty.", 400);
+    }
+    if (trimmed.length > MAX_COMPANION_NAME_LENGTH) {
+      return err(
+        "VALIDATION_ERROR",
+        `Companion name must be at most ${MAX_COMPANION_NAME_LENGTH} characters.`,
+        400
+      );
+    }
+    set.companionName = trimmed;
   }
-  if (trimmed.length > MAX_COMPANION_NAME_LENGTH) {
-    return err(
-      "VALIDATION_ERROR",
-      `Companion name must be at most ${MAX_COMPANION_NAME_LENGTH} characters.`,
-      400
-    );
+
+  if (personality !== undefined) {
+    const trimmed =
+      typeof personality === "string" ? personality.trim() : "";
+    // ponytail: slug preset dikenal ATAU teks custom (≤300). Selain itu 400.
+    if (!trimmed) {
+      return err("VALIDATION_ERROR", "Personality must not be empty.", 400);
+    }
+    if (!isPresetId(trimmed) && trimmed.length > MAX_CUSTOM_TONE_LENGTH) {
+      return err(
+        "VALIDATION_ERROR",
+        `Custom tone must be at most ${MAX_CUSTOM_TONE_LENGTH} characters.`,
+        400
+      );
+    }
+    set.personality = trimmed;
+  }
+
+  if (Object.keys(set).length === 0) {
+    return err("VALIDATION_ERROR", "Nothing to update.", 400);
   }
 
   await db
     .update(companions)
-    .set({ companionName: trimmed })
+    .set(set)
     .where(eq(companions.id, result.companion.id));
   return NextResponse.json(
-    toProfile({ ...result.companion, companionName: trimmed })
+    toProfile({ ...result.companion, ...set })
   );
 }

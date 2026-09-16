@@ -229,7 +229,7 @@ export function ChatWindow() {
               autoresize();
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Message… (Enter to send, Shift+Enter for new line)"
+            placeholder="Message…"
             aria-label="Chat message"
             className="max-h-40 min-w-0 flex-1 resize-none overflow-y-auto rounded-3xl border border-white/10 bg-echo-card px-5 py-3 text-sm leading-6 text-white placeholder:text-white/30 focus:border-white/40 focus:outline-none"
           />

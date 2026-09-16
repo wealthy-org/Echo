@@ -15,6 +15,9 @@ export const companions = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     walletAddress: text("wallet_address").notNull().unique(),
     companionName: text("companion_name").notNull().default("Companion"),
+    // ponytail: Phase 2 personality — slug preset bawaan ATAU teks custom user.
+    // Default 'balanced'; existing rows otomatis default, tanpa backfill.
+    personality: text("personality").notNull().default("balanced"),
     memorySummary: text("memory_summary").notNull().default(""),
     messageCount: integer("message_count").notNull().default(0),
     // ponytail: Phase 9 — penghitung pesan user sejak summary terakhir;

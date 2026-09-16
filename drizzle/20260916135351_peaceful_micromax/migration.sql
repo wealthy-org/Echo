@@ -1,0 +1,1 @@
+ALTER TABLE "companions" ADD COLUMN "personality" text DEFAULT 'balanced' NOT NULL;
