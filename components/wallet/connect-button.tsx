@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   useAccount,
   useChainId,
@@ -45,6 +46,7 @@ export function ConnectButton({
   } = useSwitchChain();
   const { signMessageAsync, isPending: isSigning } = useSignMessage();
   const { session, isLoading: isSessionLoading, refresh } = useSession();
+  const router = useRouter();
   const [signError, setSignError] = useState<string | null>(null);
 
   const base = `gradient-button ${className}`.trim();
@@ -140,6 +142,9 @@ export function ConnectButton({
       }
       onAction?.();
       await refresh();
+      // ponytail: push gantikan reload — session cookie sudah tersimpan,
+      // /chat baca ulang via useSession. Tanpa reload = tanpa flicker wallet reconnect.
+      router.push("/chat");
     } catch (e) {
       const msg = (e as Error)?.message ?? "";
       setSignError(
