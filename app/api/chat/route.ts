@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     return err("NOT_FOUND", "Companion not found.", 404);
   }
 
-  // ponytail: Phase 11 / FR-11 — 10/menit + 100/hari per companion, 1 query
+  // ponytail: Phase 11 / FR-11 — 5/menit + 50/hari per companion, 1 query
   // dengan 2 agregat FILTER. Cek SEBELUM LLM call agar request ditolak tidak
   // membakar kuota. 429 tidak menyimpan apa pun (counter memory ikut aman).
   const minuteStart = new Date(Date.now() - CHAT_RATE_LIMIT_WINDOW_MS);
@@ -97,12 +97,15 @@ export async function POST(request: Request) {
           }
         : null;
   if (limited) {
-    const retryAfter = limited.oldest
+    // ponytail: min(createdAt) lewat sql mentah datang sebagai string ISO
+    // (driver pg tidak memparsing timestamptz otomatis) — bungkus Date dulu.
+    const oldestMs = limited.oldest
+      ? new Date(limited.oldest as unknown as string).getTime()
+      : NaN;
+    const retryAfter = Number.isFinite(oldestMs)
       ? Math.max(
           1,
-          Math.ceil(
-            (limited.oldest.getTime() + limited.windowMs - Date.now()) / 1000
-          )
+          Math.ceil((oldestMs + limited.windowMs - Date.now()) / 1000)
         )
       : Math.ceil(limited.windowMs / 1000);
     return NextResponse.json(

@@ -53,6 +53,15 @@ function toChatMessage(m: HistoryRow): ChatMessage | null {
   return { id: m.id, role: m.role, content: m.content };
 }
 
+// ponytail: FR-11 — detik -> M:SS (<1 jam) atau J:MM:SS (limit harian).
+function formatCooldown(total: number) {
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
+  return `${h > 0 ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}`;
+}
+
 export function ChatWindow() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -64,6 +73,83 @@ export function ChatWindow() {
   const [error, setError] = useState<string | null>(null);
   const [council, setCouncil] = useState(false);
   const [councilQA, setCouncilQA] = useState<CouncilQA | null>(null);
+  // ponytail: FR-09 — modal penjelasan sekali-lihat sebelum council pertama.
+  const [councilInfoOpen, setCouncilInfoOpen] = useState(false);
+  const [councilDontShow, setCouncilDontShow] = useState(false);
+  const [councilModels, setCouncilModels] = useState<{
+    modelA: string;
+    modelB: string;
+  } | null>(null);
+
+  // ponytail: klik ⚖️ saat OFF + belum pernah lihat = modal dulu, bukan langsung ON.
+  async function handleCouncilToggle() {
+    if (council) {
+      setCouncil(false);
+      return;
+    }
+    if (window.localStorage.getItem("echo-council-seen")) {
+      setCouncil(true);
+      return;
+    }
+    // ponytail: nama model best-effort — gagal fetch = label generik.
+    try {
+      const res = await fetch("/api/council");
+      const data = (await res.json().catch(() => null)) as {
+        modelA?: unknown;
+        modelB?: unknown;
+      } | null;
+      if (typeof data?.modelA === "string" && typeof data?.modelB === "string") {
+        setCouncilModels({ modelA: data.modelA, modelB: data.modelB });
+      }
+    } catch {
+      /* abaikan — modal tetap tampil */
+    }
+    setCouncilDontShow(false);
+    setCouncilInfoOpen(true);
+  }
+
+  function confirmCouncilInfo() {
+    if (councilDontShow) {
+      window.localStorage.setItem("echo-council-seen", "1");
+    }
+    setCouncilInfoOpen(false);
+    setCouncil(true);
+  }
+  // ponytail: §4.4 — sapaan efemeral, tak masuk history/DB.
+  const [greeting, setGreeting] = useState<string | null>(null);
+  // ponytail: FR-11 — cooldown dari header retry-after 429; selama aktif
+  // input dikunci + banner countdown. 0 = tidak cooldown.
+  // ponytail: persist ke localStorage agar countdown selamat dari refresh.
+  const [cooldownUntil, setCooldownUntil] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    const saved = Number(window.localStorage.getItem("echo-cooldown-until"));
+    if (!Number.isFinite(saved) || saved <= Date.now()) {
+      window.localStorage.removeItem("echo-cooldown-until");
+      return 0;
+    }
+    return saved;
+  });
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!cooldownUntil) return;
+    const ms = cooldownUntil - Date.now();
+    // ponytail: ms <= 0 (clock skew) = timeout jalan langsung, tanpa setState sinkron.
+    const t1 = setTimeout(() => {
+      setCooldownUntil(0);
+      window.localStorage.removeItem("echo-cooldown-until");
+    }, Math.max(0, ms));
+    const t2 = setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      clearTimeout(t1);
+      clearInterval(t2);
+    };
+  }, [cooldownUntil]);
+  const cooling = cooldownUntil > 0;
+  const cooldownLeft = Math.max(
+    0,
+    Math.ceil((cooldownUntil - now) / 1000)
+  );
+  const greetedRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // ponytail: Phase 2 infinite scroll — cursor di ref (baca fresh di observer),
@@ -118,6 +204,20 @@ export function ChatWindow() {
       cancelled = true;
     };
   }, []);
+
+  // ponytail: §4.4 — 1x setelah history pertama. Gagal = diam, bukan error.
+  useEffect(() => {
+    if (loadingHistory || greetedRef.current) return;
+    greetedRef.current = true;
+    fetch("/api/greeting", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : { greeting: null }))
+      .then((data) => {
+        if (typeof data.greeting === "string" && data.greeting.trim()) {
+          setGreeting(data.greeting);
+        }
+      })
+      .catch(() => {});
+  }, [loadingHistory]);
 
   // ponytail: halaman lama prepend di atas. Kunci anti-lompat: selisih
   // scrollHeight dikembalikan setelah render via rAF.
@@ -196,7 +296,7 @@ export function ChatWindow() {
 
   useEffect(() => {
     if (stickRef.current) bottomRef.current?.scrollIntoView();
-  }, [messages, sending, councilQA]);
+  }, [messages, sending, councilQA, greeting]);
 
   // ponytail: FR-09 — non-streaming, satu blok terbaru saja (eksploratif).
   async function handleCouncilSend(message: string) {
@@ -229,6 +329,9 @@ export function ChatWindow() {
   async function handleSend() {
     const message = draft.trim();
     if (!message || sending) return;
+    // ponytail: FR-11 — kirim dibuang selama cooldown (input sudah dikunci,
+    // ini jaring pengaman Enter/keyboard).
+    if (cooldownUntil > Date.now()) return;
     // ponytail: validasi panjang di client dulu — error muncul sebelum request.
     if (message.length > MAX_MESSAGE_LENGTH) {
       setError(`Message too long (max ${MAX_MESSAGE_LENGTH} characters).`);
@@ -255,7 +358,22 @@ export function ChatWindow() {
         body: JSON.stringify({ message }),
       });
       // ponytail: error validasi (400/401/404) tetap JSON — hanya 200 yang SSE.
+      // ponytail: FR-11 — 429 tidak jadi error teks; header retry-after jadi
+      // countdown + kunci input. Default 60 dtk bila header hilang/rusak.
       if (!res.ok || !res.body) {
+        if (res.status === 429) {
+          const retryAfter = Number(res.headers.get("retry-after") ?? "60");
+          const secs =
+            Number.isFinite(retryAfter) && retryAfter > 0
+              ? Math.ceil(retryAfter)
+              : 60;
+          setError(null);
+          setNow(Date.now());
+          const until = Date.now() + secs * 1000;
+          window.localStorage.setItem("echo-cooldown-until", String(until));
+          setCooldownUntil(until);
+          return;
+        }
         const data = await res.json().catch(() => null);
         throw new Error(data?.error?.message ?? "Send failed.");
       }
@@ -377,6 +495,25 @@ export function ChatWindow() {
             </p>
           </div>
         )}
+        {greeting && (
+          <div className="flex justify-start">
+            <div className="max-w-[80%] rounded-3xl border border-echo-cyan/20 bg-echo-card px-5 py-3 text-sm leading-6 text-white">
+              <div className="mb-1 flex items-center justify-between gap-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-echo-cyan">
+                  Welcome back
+                </p>
+                <button
+                  onClick={() => setGreeting(null)}
+                  aria-label="Dismiss greeting"
+                  className="rounded-full px-1 text-base leading-none text-echo-muted transition hover:text-white"
+                >
+                  ×
+                </button>
+              </div>
+              <CompanionContent content={greeting} />
+            </div>
+          </div>
+        )}
         {councilQA && (
           <div className="rounded-3xl border border-echo-cyan/20 bg-black/30 p-4">
             <p className="mb-1 text-xs uppercase tracking-[0.2em] text-echo-cyan">
@@ -402,8 +539,16 @@ export function ChatWindow() {
         )}
         <div ref={bottomRef} />
       </div>
-      {error && (
-        <p className="px-4 pb-1 text-center text-sm text-echo-peach">{error}</p>
+      {cooling ? (
+        <p className="px-4 pb-1 text-center text-sm text-echo-peach">
+          Too many messages. Try again in {formatCooldown(cooldownLeft)}.
+        </p>
+      ) : (
+        error && (
+          <p className="px-4 pb-1 text-center text-sm text-echo-peach">
+            {error}
+          </p>
+        )
       )}
       <div className="border-t border-white/10 bg-black/30">
         <div className="mx-auto flex w-full max-w-[68rem] items-center justify-between px-5 pt-2 text-xs">
@@ -432,13 +577,18 @@ export function ChatWindow() {
               autoresize();
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Message…"
+            placeholder={
+              cooling
+                ? `Wait ${formatCooldown(cooldownLeft)}…`
+                : "Message…"
+            }
             aria-label="Chat message"
+            disabled={sending || cooling}
             className="max-h-40 min-w-0 flex-1 resize-none overflow-y-auto rounded-3xl border border-white/10 bg-echo-card px-5 py-3 text-sm leading-6 text-white placeholder:text-white/30 focus:border-white/40 focus:outline-none"
           />
           <button
             type="button"
-            onClick={() => setCouncil((v) => !v)}
+            onClick={() => void handleCouncilToggle()}
             disabled={sending}
             aria-pressed={council}
             title="Compare two models side by side (not saved)"
@@ -452,7 +602,7 @@ export function ChatWindow() {
           </button>
           <button
             type="submit"
-            disabled={!draft.trim() || sending || tooLong}
+            disabled={!draft.trim() || sending || tooLong || cooling}
             onMouseMove={trackCursor}
             className="gradient-button shrink-0 rounded-full px-6 py-3 text-sm font-medium text-white disabled:opacity-40"
           >
@@ -460,6 +610,71 @@ export function ChatWindow() {
           </button>
         </form>
       </div>
+      {/* ponytail: FR-09 — modal penjelasan council, pola sama seperti modal Profile. */}
+      {councilInfoOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setCouncilInfoOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="About Council"
+            className="w-full max-w-md rounded-2xl border border-white/10 bg-echo-card p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-white">
+                ⚖ Council
+              </h2>
+              <button
+                type="button"
+                onClick={() => setCouncilInfoOpen(false)}
+                aria-label="Close"
+                className="rounded-full px-2 py-1 text-white/50 hover:text-white"
+              >
+                ×
+              </button>
+            </div>
+            <p className="text-sm leading-6 text-white/70">
+              Council mengirim pertanyaanmu ke dua model sekaligus dan
+              menampilkan kedua jawaban berdampingan — cocok untuk
+              membandingkan sudut pandang. Hasilnya tidak disimpan ke
+              history.
+            </p>
+            <div className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3 text-xs leading-5 text-white/60">
+              <div>
+                Model A:{" "}
+                <span className="text-white/90">
+                  {councilModels?.modelA ?? "Model A"}
+                </span>
+              </div>
+              <div>
+                Model B:{" "}
+                <span className="text-white/90">
+                  {councilModels?.modelB ?? "Model B"}
+                </span>
+              </div>
+            </div>
+            <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-white/70">
+              <input
+                type="checkbox"
+                checked={councilDontShow}
+                onChange={(e) => setCouncilDontShow(e.target.checked)}
+                className="accent-cyan-400"
+              />
+              Jangan tampilkan lagi
+            </label>
+            <button
+              type="button"
+              onClick={confirmCouncilInfo}
+              className="gradient-button mt-4 w-full rounded-full px-6 py-3 text-sm font-medium text-white"
+            >
+              <span>Mengerti, aktifkan Council</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

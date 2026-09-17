@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useSession } from "../../components/wallet/use-session";
 import { CompanionContent } from "../../components/chat/message-content";
+import { ChatSidebar } from "../../components/chat/chat-sidebar";
 
 // ponytail: FR-07 — 1 halaman list entri per tanggal, terbaru dulu.
 // Guard + loading ikut pola app/chat/page.tsx.
@@ -26,6 +26,12 @@ export default function JournalPage() {
   const router = useRouter();
   const { session, isLoading } = useSession();
   const [entries, setEntries] = useState<JournalEntry[] | null>(null);
+  // ponytail: ikut pola app/chat/page.tsx — lazy init, bukan effect.
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(min-width: 768px)").matches
+  );
 
   useEffect(() => {
     if (!isLoading && !session?.authenticated) router.replace("/");
@@ -57,19 +63,28 @@ export default function JournalPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col text-white">
+    <main className="flex min-h-screen text-white">
       <div className="site-background" aria-hidden />
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-black/75 backdrop-blur-xl">
-        <div className="mx-auto flex h-[72px] w-full max-w-[68rem] items-center justify-between px-5">
-          <h1 className="font-semibold tracking-[-0.02em]">Journal</h1>
-          <Link
-            href="/chat"
-            className="rounded-full border border-white/10 px-4 py-1.5 text-xs text-echo-muted transition hover:border-white/30 hover:text-white"
-          >
-            ← Back to chat
-          </Link>
-        </div>
-      </header>
+      <ChatSidebar
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen((v) => !v)}
+        active="journal"
+      />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-20 border-b border-white/10 bg-black/75 backdrop-blur-xl">
+          <div className="mx-auto flex h-[72px] w-full max-w-[68rem] items-center gap-2 px-5">
+            {!sidebarOpen && (
+              <button
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Open sidebar"
+                className="-ml-3 rounded-full px-3 py-1.5 text-xs text-echo-muted transition hover:bg-white/5 hover:text-white md:hidden"
+              >
+                Menu
+              </button>
+            )}
+            <h1 className="font-semibold tracking-[-0.02em]">Journal</h1>
+          </div>
+        </header>
       <section className="mx-auto w-full max-w-[68rem] flex-1 space-y-4 px-5 py-6">
         {entries === null && (
           <p className="animate-pulse pt-16 text-center text-sm text-echo-muted/60">
@@ -101,6 +116,7 @@ export default function JournalPage() {
           </article>
         ))}
       </section>
+      </div>
     </main>
   );
 }

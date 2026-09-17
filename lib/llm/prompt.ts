@@ -121,3 +121,24 @@ export function buildSummaryPrompt(
     },
   ];
 }
+
+// ponytail: §4.4 greeting — 1 pertanyaan pembuka dari memory terakhir,
+// bukan sapaan generik. Summary di-scrub (isi DB = teks restored);
+// placeholder kecil kemungkinan dikutip dalam pertanyaan topik.
+export function buildGreetingPrompt(summary: string): PromptMessage[] {
+  return [
+    {
+      role: "system",
+      content:
+        "Write ONE short opening question for a personal AI companion " +
+        "welcoming the user back after a day or more away. Refer to the " +
+        "last topic or open thread in the memory below — warm and personal, " +
+        "never a generic greeting. Write in the same language the user used. " +
+        "Reply with the single question only, no preamble.",
+    },
+    {
+      role: "user",
+      content: `Memory:\n${redactPII(summary)}`,
+    },
+  ];
+}

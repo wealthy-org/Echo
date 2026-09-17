@@ -26,6 +26,18 @@ function err(code: string, message: string, status: number) {
   return NextResponse.json({ error: { code, message } }, { status });
 }
 
+// ponytail: info nama model untuk modal penjelasan — tanpa kirim pesan.
+export async function GET() {
+  const session = await getSession();
+  if (!session.walletAddress || !session.companionId) {
+    return err("UNAUTHENTICATED", "Sign in required.", 401);
+  }
+  return NextResponse.json({
+    modelA: getChatModel(),
+    modelB: getCouncilModel(),
+  });
+}
+
 export async function POST(request: Request) {
   const session = await getSession();
   if (!session.walletAddress || !session.companionId) {

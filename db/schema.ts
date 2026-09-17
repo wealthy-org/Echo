@@ -23,13 +23,16 @@ export const companions = pgTable(
     memorySummary: text("memory_summary").notNull().default(""),
     messageCount: integer("message_count").notNull().default(0),
     // ponytail: Phase 9 — penghitung pesan user sejak summary terakhir;
-    // trigger regen memorySummary tiap 20 (PRD §15). Bukan duplikat memory.
+    // trigger regen memorySummary tiap 10 (PRD §15). Bukan duplikat memory.
     messagesSinceSummary: integer("messages_since_summary")
       .notNull()
       .default(0),
     // ponytail: FR-07 journal — hari UTC terakhir ada aktivitas. NULL (baris
     // lama) = dianggap hari ini saat pertama dibaca, tanpa backfill.
     lastActiveDate: date("last_active_date"),
+    // ponytail: §4.4 greeting — terakhir membuka aplikasi (presisi jam;
+    // lastActiveDate hanya DATE). NULL = lewati greeting sekali, lalu set now.
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

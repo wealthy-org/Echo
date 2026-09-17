@@ -2,12 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useSession } from "../../components/wallet/use-session";
-import { useCompanion } from "../../components/companion/use-companion";
 import { ConnectButton } from "../../components/wallet/connect-button";
-import { CompanionPanel } from "../../components/companion/companion-panel";
 import { ChatWindow } from "../../components/chat/chat-window";
+import { ChatSidebar } from "../../components/chat/chat-sidebar";
 
 // ponytail: shell dulu, UI chat penuh Phase 6. Guard di client karena session
 // hidup di httpOnly cookie — server component butuh getSession sendiri (boros),
@@ -16,8 +14,13 @@ import { ChatWindow } from "../../components/chat/chat-window";
 export default function ChatPage() {
   const router = useRouter();
   const { session, isLoading } = useSession();
-  const { profile } = useCompanion();
-  const [panelOpen, setPanelOpen] = useState(false);
+  // ponytail: sidebar terbuka default di desktop, tertutup di mobile
+  // (di sana ia jadi overlay). Lazy init, bukan effect (lint set-state-in-effect).
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(min-width: 768px)").matches
+  );
 
   useEffect(() => {
     if (!isLoading && !session?.authenticated) router.replace("/");
@@ -33,46 +36,36 @@ export default function ChatPage() {
   }
 
   return (
-    <main className="flex h-screen flex-col text-white">
+    <main className="flex h-screen text-white">
       <div className="site-background" aria-hidden />
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-black/75 backdrop-blur-xl">
-        <div className="mx-auto flex h-[72px] w-full max-w-[68rem] items-center justify-between px-5">
-          <div className="relative">
-            <button
-              onClick={() => setPanelOpen((v) => !v)}
-              className="-ml-3 flex items-center gap-2 rounded-full px-3 py-1.5 font-semibold tracking-[-0.02em] transition hover:bg-white/5"
-              aria-haspopup="dialog"
-              aria-expanded={panelOpen}
-              aria-label="Companion profile"
-            >
-              {profile?.companion_name ?? "Echo"}
-              <span
-                aria-hidden
-                className={`text-xs text-echo-muted transition-transform ${panelOpen ? "rotate-180" : ""}`}
-              >
-                ▼
-              </span>
-            </button>
-            {panelOpen && (
-              <div className="absolute left-0 top-full z-50 mt-3">
-                <CompanionPanel />
-              </div>
-            )}
+      <ChatSidebar
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen((v) => !v)}
+        active="chat"
+      />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-20 border-b border-white/10 bg-black/75 backdrop-blur-xl">
+          <div className="mx-auto flex h-[72px] w-full max-w-[68rem] items-center justify-between px-5">
+            <div className="flex items-center">
+              {!sidebarOpen && (
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  aria-label="Open sidebar"
+                  className="-ml-3 rounded-full px-3 py-1.5 text-xs text-echo-muted transition hover:bg-white/5 hover:text-white md:hidden"
+                >
+                  Menu
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <ConnectButton showChatLink={false} />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/journal"
-              className="rounded-full border border-white/10 px-4 py-1.5 text-xs text-echo-muted transition hover:border-white/30 hover:text-white"
-            >
-              Journal
-            </Link>
-            <ConnectButton showChatLink={false} />
-          </div>
-        </div>
-      </header>
-      <section className="flex min-h-0 flex-1 flex-col">
-        <ChatWindow />
-      </section>
+        </header>
+        <section className="flex min-h-0 flex-1 flex-col">
+          <ChatWindow />
+        </section>
+      </div>
     </main>
   );
 }

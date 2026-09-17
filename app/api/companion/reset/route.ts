@@ -28,7 +28,13 @@ export async function POST() {
         .where(eq(journalEntries.companionId, companionId));
       await tx
         .update(companions)
-        .set({ memorySummary: "", messageCount: 0, messagesSinceSummary: 0 })
+        .set({
+          memorySummary: "",
+          messageCount: 0,
+          messagesSinceSummary: 0,
+          // ponytail: §4.4 — fresh start: sapaan dilewati sekali berikutnya.
+          lastSeenAt: null,
+        })
         .where(eq(companions.id, companionId));
     });
   } catch (e) {

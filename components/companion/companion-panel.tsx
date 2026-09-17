@@ -24,7 +24,7 @@ function knownSince(iso: string) {
   });
 }
 
-export function CompanionPanel() {
+export function CompanionPanel({ onClose }: { onClose: () => void }) {
   const { profile, isLoading, rename, reset, personality } = useCompanion();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -35,7 +35,18 @@ export function CompanionPanel() {
   const [customDraft, setCustomDraft] = useState("");
 
   if (isLoading || !profile) {
-    return <p className="animate-pulse text-sm text-echo-muted/60">Loading…</p>;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <button
+          aria-label="Close profile"
+          onClick={onClose}
+          className="absolute inset-0 cursor-default bg-black/70"
+        />
+        <p className="relative animate-pulse rounded-3xl border border-white/10 bg-echo-card p-5 text-sm text-echo-muted/60">
+          Loading…
+        </p>
+      </div>
+    );
   }
 
   const error = rename.error ?? reset.error ?? personality.error;
@@ -67,7 +78,24 @@ export function CompanionPanel() {
   }
 
   return (
-    <div className="w-80 rounded-3xl border border-white/10 bg-echo-card p-5 text-white shadow-2xl shadow-black/60">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        aria-label="Close profile"
+        onClick={onClose}
+        className="absolute inset-0 cursor-default bg-black/70"
+      />
+      <div className="relative max-h-[90vh] w-80 overflow-y-auto rounded-3xl border border-white/10 bg-echo-card text-white shadow-2xl shadow-black/60">
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+          <p className="text-sm font-semibold tracking-[-0.02em]">Profile</p>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-full px-2 py-0.5 text-lg leading-none text-echo-muted transition hover:bg-white/5 hover:text-white"
+          >
+            ×
+          </button>
+        </div>
+        <div className="p-5">
       {editing ? (
         <div className="flex gap-2">
           <input
@@ -255,6 +283,8 @@ export function CompanionPanel() {
             Reset companion
           </button>
         )}
+      </div>
+        </div>
       </div>
     </div>
   );
