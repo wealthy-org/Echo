@@ -420,7 +420,13 @@ export function ChatWindow() {
     const regenerate = opts?.regenerate === true;
     // ponytail: try-again optimistik — potong pair terakhir lokal; gagal = rollback.
     const snapshot = regenerate ? messages : null;
-    if (snapshot) setMessages((m) => m.slice(0, -2));
+    if (snapshot)
+      setMessages((m) => [
+        ...m.slice(0, -2),
+        // ponytail: bubble user langsung dikembalikan sinkron — selama AI
+        // typing yang hilang hanya balasan companion, bukan pesan user.
+        { id: crypto.randomUUID(), role: "user", content: message },
+      ]);
     setDraft("");
     if (inputRef.current) inputRef.current.style.height = "auto";
     setError(null);
@@ -465,6 +471,9 @@ export function ChatWindow() {
         throw new Error(data?.error?.message ?? "Send failed.");
       }
       // Bubble companion dibuat kosong duluan — delta pertama tinggal isi.
+      // ponytail: regenerate — bubble user sudah dikembalikan sinkron di atas,
+      // di sini tinggal bubble companion kosong untuk stream.
+      // server menyimpan ulang pair user+companion sehingga tampilan = DB.
       setMessages((m) => [
         ...m,
         { id: crypto.randomUUID(), role: "companion", content: "" },
