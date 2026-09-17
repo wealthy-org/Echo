@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { chatMessages, companions } from "../../../db/schema";
 import { db } from "../../../lib/db";
 import { getSession } from "../../../lib/auth/session";
@@ -46,10 +46,11 @@ export async function POST(request: Request) {
   } catch {
     return err("VALIDATION_ERROR", "Invalid JSON body.", 400);
   }
-  const { message, mode, regenerate } = (body ?? {}) as {
+  const { message, mode, regenerate, editId } = (body ?? {}) as {
     message?: unknown;
     mode?: unknown;
     regenerate?: unknown;
+    editId?: unknown;
   };
   // ponytail: FR-11 — mode decision opsional; selain itu = chat biasa.
   const decision = mode === "decision";
@@ -94,6 +95,40 @@ export async function POST(request: Request) {
         await tx.delete(chatMessages).where(eq(chatMessages.id, row.id));
       }
     });
+  }
+
+  // ponytail: edit bebas — hapus pesan tsb + balasannya + semua pesan
+  // sesudahnya (potong history), lalu pipeline normal kirim teks editan
+  // sebagai lanjutan. Pesan milik companion lain = 400.
+  let pruned = 0;
+  if (typeof editId === "string" && editId) {
+    const [target] = await db
+      .select({
+        id: chatMessages.id,
+        seq: chatMessages.seq,
+        role: chatMessages.role,
+      })
+      .from(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.id, editId),
+          eq(chatMessages.companionId, companion.id)
+        )
+      )
+      .limit(1);
+    if (!target || target.role !== "user") {
+      return err("VALIDATION_ERROR", "Edited message not found.", 400);
+    }
+    const deleted = await db
+      .delete(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.companionId, companion.id),
+          gte(chatMessages.seq, target.seq)
+        )
+      )
+      .returning({ id: chatMessages.id });
+    pruned = deleted.length;
   }
 
   // ponytail: Phase 11 / FR-11 — 5/menit + 50/hari per companion, 1 query
@@ -223,7 +258,7 @@ export async function POST(request: Request) {
           await tx
             .update(companions)
             .set({
-              messageCount: companion.messageCount + 2,
+              messageCount: companion.messageCount - pruned + 2,
               messagesSinceSummary: newSince,
             })
             .where(eq(companions.id, companion.id));

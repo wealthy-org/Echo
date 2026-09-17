@@ -283,6 +283,9 @@ export function ChatWindow() {
   // ponytail: aksi per pesan — copy (feedback Check 1,5 dtk), edit inline user.
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ponytail: id pesan yg diedit — dibaca handleSend, bukan dikirim
+  // sebagai argumen (lihat catatan purity di handleSend).
+  const editIdRef = useRef<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   // ponytail: voice — STT guard sekali (Firefox desktop tak support),
@@ -727,9 +730,28 @@ export function ChatWindow() {
       return;
     }
     const regenerate = opts?.regenerate === true;
+    // ponytail: editId via ref (bukan argumen) — object literal di call-site
+    // mengacaukan heuristic purity lint. Konsumsi sekali, langsung nolkan.
+    const editId = editIdRef.current;
+    editIdRef.current = null;
+    // ponytail: edit bebas — potong dari pesan tsb ke bawah (semua sesudahnya
+    // ikut hilang, sesuai server); tak ketemu lokal = batalkan sebelum kirim.
+    let editIndex = -1;
+    if (editId) {
+      editIndex = messages.findIndex((x) => x.id === editId && x.role === "user");
+      if (editIndex < 0) {
+        setError("Message is no longer loaded. Refresh and try again.");
+        return;
+      }
+    }
     // ponytail: try-again optimistik — potong pair terakhir lokal; gagal = rollback.
-    const snapshot = regenerate ? messages : null;
-    if (snapshot)
+    const snapshot = regenerate || editId ? messages : null;
+    if (snapshot && editId && editIndex >= 0)
+      setMessages([
+        ...messages.slice(0, editIndex),
+        { id: crypto.randomUUID(), role: "user", content: message },
+      ]);
+    if (snapshot && regenerate)
       setMessages((m) => [
         ...m.slice(0, -2),
         // ponytail: bubble user langsung dikembalikan sinkron — selama AI
@@ -756,6 +778,7 @@ export function ChatWindow() {
           message,
           ...(decision ? { mode: "decision" } : {}),
           ...(regenerate ? { regenerate: true } : {}),
+          ...(editId ? { editId } : {}),
         }),
       });
       // ponytail: error validasi (400/401/404) tetap JSON — hanya 200 yang SSE.
@@ -848,6 +871,19 @@ export function ChatWindow() {
     }
   }
 
+  // ponytail: save edit = potong history dari pesan tsb (server, via ref)
+  // lalu regen. Id + teks asli dicari dari state, tanpa closure di JSX.
+  function handleSaveEdit() {
+    const text = editDraft.trim();
+    const id = editingId;
+    setEditingId(null);
+    const original = messages.find((x) => x.id === id)?.content;
+    if (text && id && original && text !== original) {
+      editIdRef.current = id;
+      void handleSend(text);
+    }
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div
@@ -914,15 +950,9 @@ export function ChatWindow() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          const text = editDraft.trim();
-                          setEditingId(null);
-                          if (text && text !== m.content) {
-                            void handleSend(text);
-                          }
-                        }}
-                        aria-label="Save and resend"
-                        title="Save and resend as new message"
+                        onClick={handleSaveEdit}
+                        aria-label="Save edit and regenerate reply"
+                        title="Save edit and regenerate reply"
                         className="rounded-full p-1.5 text-white/50 transition hover:bg-white/5 hover:text-white"
                       >
                         <Check size={14} />
@@ -951,7 +981,7 @@ export function ChatWindow() {
                           setEditingId(m.id);
                         }}
                         aria-label="Edit message"
-                        title="Edit and resend as new"
+                        title="Edit and regenerate reply"
                         disabled={sending}
                         className="rounded-full p-1.5 text-white/40 transition hover:bg-white/5 hover:text-white disabled:opacity-40"
                       >
