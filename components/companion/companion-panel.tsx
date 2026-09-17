@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { X } from "lucide-react";
 import {
   MAX_COMPANION_NAME_LENGTH,
   MAX_CUSTOM_TONE_LENGTH,
@@ -90,9 +91,9 @@ export function CompanionPanel({ onClose }: { onClose: () => void }) {
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded-full px-2 py-0.5 text-lg leading-none text-echo-muted transition hover:bg-white/5 hover:text-white"
+            className="rounded-full p-1 text-echo-muted transition hover:bg-white/5 hover:text-white"
           >
-            ×
+            <X size={16} />
           </button>
         </div>
         <div className="p-5">

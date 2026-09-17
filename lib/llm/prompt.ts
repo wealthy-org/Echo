@@ -67,6 +67,36 @@ export function buildChatPrompt(
   return messages;
 }
 
+// ponytail: FR-11 decision helper — prompt sama seperti chat + 1 blok mode.
+// Hasil tetap disimpan ke history (bukan efemeral seperti council).
+export function buildDecisionPrompt(
+  memorySummary: string,
+  recent: { role: "user" | "companion"; content: string }[],
+  currentMessage: string,
+  personality?: string | null,
+  map?: PiiMap
+): PromptMessage[] {
+  const messages = buildChatPrompt(
+    memorySummary,
+    recent,
+    currentMessage,
+    personality,
+    map
+  );
+  messages.push({
+    role: "system",
+    content:
+      "DECISION MODE\nThe user wants help thinking through a decision. " +
+      "Break it into distinct options; for each option list the key " +
+      "pros and cons grounded in the conversation above. " +
+      "End with 1-3 short clarifying questions that would make the " +
+      "choice clearer. Do not make the decision for the user and do " +
+      "not present speculation as certainty. Write in the same " +
+      "language the user used.",
+  });
+  return messages;
+}
+
 // ponytail: FR-07 journal (PRD §10) — untuk DIBACA user langsung, bukan
 // konteks internal seperti memory summary. Poin nyata percakapan hari itu.
 export function buildJournalPrompt(

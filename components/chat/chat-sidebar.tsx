@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { MessageSquare, NotebookPen, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import {
   PERSONALITY_PRESETS,
   isPresetId,
@@ -26,8 +27,8 @@ function initials(name: string) {
 }
 
 const NAV = [
-  { href: "/chat", label: "Chat", icon: "💬", key: "chat" },
-  { href: "/journal", label: "Journal", icon: "📓", key: "journal" },
+  { href: "/chat", label: "Chat", icon: MessageSquare, key: "chat" },
+  { href: "/journal", label: "Journal", icon: NotebookPen, key: "journal" },
 ] as const;
 
 export function ChatSidebar({ open, onToggle, active }: ChatSidebarProps) {
@@ -66,9 +67,9 @@ export function ChatSidebar({ open, onToggle, active }: ChatSidebarProps) {
               <button
                 onClick={onToggle}
                 aria-label="Collapse sidebar"
-                className="rounded-full px-3 py-1.5 text-lg leading-none text-echo-muted transition hover:bg-white/5 hover:text-white"
+                className="rounded-full p-2 text-echo-muted transition hover:bg-white/5 hover:text-white"
               >
-                «
+                <PanelLeftClose size={18} />
               </button>
             </div>
             <nav className="flex flex-1 flex-col gap-1 px-3">
@@ -83,7 +84,7 @@ export function ChatSidebar({ open, onToggle, active }: ChatSidebarProps) {
                       : "text-echo-muted hover:bg-white/5 hover:text-white"
                   }`}
                 >
-                  <span aria-hidden>{item.icon}</span> {item.label}
+                  <item.icon size={17} aria-hidden /> {item.label}
                 </Link>
               ))}
             </nav>
@@ -114,12 +115,12 @@ export function ChatSidebar({ open, onToggle, active }: ChatSidebarProps) {
         ) : (
           <div className="hidden h-full flex-col items-center md:flex">
             <div className="flex h-[72px] shrink-0 items-center">
-              <button
+                <button
                 onClick={onToggle}
                 aria-label="Expand sidebar"
-                className="rounded-full px-3 py-1.5 text-lg leading-none text-echo-muted transition hover:bg-white/5 hover:text-white"
+                className="rounded-full p-2 text-echo-muted transition hover:bg-white/5 hover:text-white"
               >
-                »
+                <PanelLeftOpen size={18} />
               </button>
             </div>
             <nav className="flex flex-1 flex-col items-center gap-1">
@@ -130,13 +131,13 @@ export function ChatSidebar({ open, onToggle, active }: ChatSidebarProps) {
                   title={item.label}
                   aria-label={item.label}
                   onClick={handleNav}
-                  className={`rounded-2xl px-3 py-2.5 text-xl transition ${
+                  className={`rounded-2xl p-2.5 transition ${
                     active === item.key
-                      ? "bg-white/10"
-                      : "text-echo-muted hover:bg-white/5"
+                      ? "bg-white/10 text-white"
+                      : "text-echo-muted hover:bg-white/5 hover:text-white"
                   }`}
                 >
-                  <span aria-hidden>{item.icon}</span>
+                  <item.icon size={19} aria-hidden />
                 </Link>
               ))}
             </nav>

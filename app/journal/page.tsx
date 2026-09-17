@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Menu } from "lucide-react";
 import { useSession } from "../../components/wallet/use-session";
 import { CompanionContent } from "../../components/chat/message-content";
 import { ChatSidebar } from "../../components/chat/chat-sidebar";
@@ -77,9 +78,9 @@ export default function JournalPage() {
               <button
                 onClick={() => setSidebarOpen(true)}
                 aria-label="Open sidebar"
-                className="-ml-3 rounded-full px-3 py-1.5 text-xs text-echo-muted transition hover:bg-white/5 hover:text-white md:hidden"
+                className="-ml-3 rounded-full p-2 text-echo-muted transition hover:bg-white/5 hover:text-white md:hidden"
               >
-                Menu
+                <Menu size={18} />
               </button>
             )}
             <h1 className="font-semibold tracking-[-0.02em]">Journal</h1>

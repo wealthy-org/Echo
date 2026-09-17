@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Menu } from "lucide-react";
 import { useSession } from "../../components/wallet/use-session";
 import { ConnectButton } from "../../components/wallet/connect-button";
 import { ChatWindow } from "../../components/chat/chat-window";
@@ -51,9 +52,9 @@ export default function ChatPage() {
                 <button
                   onClick={() => setSidebarOpen(true)}
                   aria-label="Open sidebar"
-                  className="-ml-3 rounded-full px-3 py-1.5 text-xs text-echo-muted transition hover:bg-white/5 hover:text-white md:hidden"
+                  className="-ml-3 rounded-full p-2 text-echo-muted transition hover:bg-white/5 hover:text-white md:hidden"
                 >
-                  Menu
+                  <Menu size={18} />
                 </button>
               )}
             </div>

@@ -10,7 +10,7 @@ export const MEMORY_REGEN_THRESHOLD = 10;
 
 // ponytail: Phase 11 / FR-11 — 5 pesan user/menit + 50/hari per companion.
 // Tanpa dep baru: dihitung dari chat_messages via index yang sudah ada.
-export const CHAT_RATE_LIMIT_COUNT = 1;
+export const CHAT_RATE_LIMIT_COUNT = 5;
 export const CHAT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 export const CHAT_RATE_LIMIT_DAILY_COUNT = 50;
 export const CHAT_RATE_LIMIT_DAY_MS = 24 * 60 * 60 * 1000;

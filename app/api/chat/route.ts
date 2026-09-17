@@ -3,7 +3,11 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { chatMessages, companions } from "../../../db/schema";
 import { db } from "../../../lib/db";
 import { getSession } from "../../../lib/auth/session";
-import { buildChatPrompt, buildSummaryPrompt } from "../../../lib/llm/prompt";
+import {
+  buildChatPrompt,
+  buildDecisionPrompt,
+  buildSummaryPrompt,
+} from "../../../lib/llm/prompt";
 import { completeChat, completeChatStream } from "../../../lib/llm/openrouter";
 import { ensureJournalUpToDate } from "../../../lib/journal/generate";
 import {
@@ -42,7 +46,13 @@ export async function POST(request: Request) {
   } catch {
     return err("VALIDATION_ERROR", "Invalid JSON body.", 400);
   }
-  const { message } = (body ?? {}) as { message?: unknown };
+  const { message, mode, regenerate } = (body ?? {}) as {
+    message?: unknown;
+    mode?: unknown;
+    regenerate?: unknown;
+  };
+  // ponytail: FR-11 — mode decision opsional; selain itu = chat biasa.
+  const decision = mode === "decision";
   if (typeof message !== "string" || !message.trim()) {
     return err("VALIDATION_ERROR", "Message must not be empty.", 400);
   }
@@ -61,6 +71,29 @@ export async function POST(request: Request) {
     .limit(1);
   if (!companion) {
     return err("NOT_FOUND", "Companion not found.", 404);
+  }
+
+  // ponytail: try-again — hapus pair terakhir (user+companion) SEBELUM
+  // pipeline normal, agar regenerate tidak menduplikasi history.
+  if (regenerate === true) {
+    const lastTwo = await db
+      .select({ id: chatMessages.id, role: chatMessages.role })
+      .from(chatMessages)
+      .where(eq(chatMessages.companionId, companion.id))
+      .orderBy(desc(chatMessages.seq))
+      .limit(2);
+    if (
+      lastTwo.length !== 2 ||
+      lastTwo[0]?.role !== "companion" ||
+      lastTwo[1]?.role !== "user"
+    ) {
+      return err("VALIDATION_ERROR", "No completed reply to regenerate.", 400);
+    }
+    await db.transaction(async (tx) => {
+      for (const row of lastTwo) {
+        await tx.delete(chatMessages).where(eq(chatMessages.id, row.id));
+      }
+    });
   }
 
   // ponytail: Phase 11 / FR-11 — 5/menit + 50/hari per companion, 1 query
@@ -134,13 +167,21 @@ export async function POST(request: Request) {
   // ponytail: §4.2 — satu map per request agar placeholder konsisten di
   // chat + summary regen; in-memory, tidak disimpan.
   const piiMap: PiiMap = new Map();
-  const prompt = buildChatPrompt(
-    companion.memorySummary,
-    recent,
-    trimmed,
-    companion.personality,
-    piiMap
-  );
+  const prompt = decision
+    ? buildDecisionPrompt(
+        companion.memorySummary,
+        recent,
+        trimmed,
+        companion.personality,
+        piiMap
+      )
+    : buildChatPrompt(
+        companion.memorySummary,
+        recent,
+        trimmed,
+        companion.personality,
+        piiMap
+      );
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({

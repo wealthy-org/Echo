@@ -1,6 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import {
+  Check,
+  Compass,
+  Copy,
+  Pencil,
+  RotateCcw,
+  Scale,
+  SendHorizontal,
+  X,
+} from "lucide-react";
 import { MAX_MESSAGE_LENGTH } from "../../lib/chat/constants";
 import { CompanionContent } from "./message-content";
 
@@ -81,13 +91,14 @@ export function ChatWindow() {
     modelB: string;
   } | null>(null);
 
-  // ponytail: klik ⚖️ saat OFF + belum pernah lihat = modal dulu, bukan langsung ON.
+  // ponytail: klik toggle council saat OFF + belum pernah lihat = modal dulu.
   async function handleCouncilToggle() {
     if (council) {
       setCouncil(false);
       return;
     }
     if (window.localStorage.getItem("echo-council-seen")) {
+      setDecision(false);
       setCouncil(true);
       return;
     }
@@ -113,7 +124,36 @@ export function ChatWindow() {
       window.localStorage.setItem("echo-council-seen", "1");
     }
     setCouncilInfoOpen(false);
+    setDecision(false);
     setCouncil(true);
+  }
+  // ponytail: FR-11 — mode bantu keputusan, hasil TETAP masuk history.
+  // Saling lepas dengan council (prompt berbeda, council tak tersimpan).
+  const [decision, setDecision] = useState(false);
+  const [decisionInfoOpen, setDecisionInfoOpen] = useState(false);
+  const [decisionDontShow, setDecisionDontShow] = useState(false);
+
+  function handleDecisionToggle() {
+    if (decision) {
+      setDecision(false);
+      return;
+    }
+    if (window.localStorage.getItem("echo-decision-seen")) {
+      setCouncil(false);
+      setDecision(true);
+      return;
+    }
+    setDecisionDontShow(false);
+    setDecisionInfoOpen(true);
+  }
+
+  function confirmDecisionInfo() {
+    if (decisionDontShow) {
+      window.localStorage.setItem("echo-decision-seen", "1");
+    }
+    setDecisionInfoOpen(false);
+    setCouncil(false);
+    setDecision(true);
   }
   // ponytail: §4.4 — sapaan efemeral, tak masuk history/DB.
   const [greeting, setGreeting] = useState<string | null>(null);
@@ -149,9 +189,41 @@ export function ChatWindow() {
     0,
     Math.ceil((cooldownUntil - now) / 1000)
   );
+  // ponytail: id balasan terakhir (khusus tombol try-again).
+  const lastCompanionId =
+    messages.length > 0 && messages[messages.length - 1]?.role === "companion"
+      ? (messages[messages.length - 1]?.id ?? null)
+      : null;
   const greetedRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // ponytail: aksi per pesan — copy (feedback Check 1,5 dtk), edit inline user.
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+
+  async function handleCopy(id: string, content: string) {
+    try {
+      await navigator.clipboard.writeText(content);
+    } catch {
+      setError("Copy failed. Please try again.");
+      return;
+    }
+    setCopiedId(id);
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopiedId(null), 1500);
+  }
+
+  // ponytail: try-again hanya balasan TERAKHIR — ganti pair di server,
+  // kirim ulang sebagai regenerate agar history tak duplikat.
+  function handleTryAgain() {
+    if (sending || cooling || messages.length < 2) return;
+    const last = messages[messages.length - 1];
+    const prev = messages[messages.length - 2];
+    if (!last || !prev || last.role !== "companion" || prev.role !== "user") return;
+    void handleSend(prev.content, { regenerate: true });
+  }
   // ponytail: Phase 2 infinite scroll — cursor di ref (baca fresh di observer),
   // cermin state untuk render. stick = user di dekat bawah → auto-scroll aman.
   const listRef = useRef<HTMLDivElement>(null);
@@ -326,8 +398,11 @@ export function ChatWindow() {
     }
   }
 
-  async function handleSend() {
-    const message = draft.trim();
+  async function handleSend(
+    textOverride?: string,
+    opts?: { regenerate?: boolean }
+  ) {
+    const message = (textOverride ?? draft).trim();
     if (!message || sending) return;
     // ponytail: FR-11 — kirim dibuang selama cooldown (input sudah dikunci,
     // ini jaring pengaman Enter/keyboard).
@@ -342,20 +417,31 @@ export function ChatWindow() {
       await handleCouncilSend(message);
       return;
     }
+    const regenerate = opts?.regenerate === true;
+    // ponytail: try-again optimistik — potong pair terakhir lokal; gagal = rollback.
+    const snapshot = regenerate ? messages : null;
+    if (snapshot) setMessages((m) => m.slice(0, -2));
     setDraft("");
     if (inputRef.current) inputRef.current.style.height = "auto";
     setError(null);
     setStreamed(false);
-    setMessages((m) => [
-      ...m,
-      { id: crypto.randomUUID(), role: "user", content: message },
-    ]);
+    if (!regenerate) {
+      setMessages((m) => [
+        ...m,
+        { id: crypto.randomUUID(), role: "user", content: message },
+      ]);
+    }
     setSending(true);
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message }),
+        // ponytail: FR-11 — decision ikut alur chat biasa, beda prompt saja.
+        body: JSON.stringify({
+          message,
+          ...(decision ? { mode: "decision" } : {}),
+          ...(regenerate ? { regenerate: true } : {}),
+        }),
       });
       // ponytail: error validasi (400/401/404) tetap JSON — hanya 200 yang SSE.
       // ponytail: FR-11 — 429 tidak jadi error teks; header retry-after jadi
@@ -372,6 +458,7 @@ export function ChatWindow() {
           const until = Date.now() + secs * 1000;
           window.localStorage.setItem("echo-cooldown-until", String(until));
           setCooldownUntil(until);
+          if (snapshot) setMessages(snapshot);
           return;
         }
         const data = await res.json().catch(() => null);
@@ -424,11 +511,14 @@ export function ChatWindow() {
         reader.releaseLock();
       }
       if (!reply.trim()) {
-        // ponytail: stream selesai tanpa isi = buang bubble kosong, gagalkan sekalian.
-        setMessages((m) => m.slice(0, -1));
+        // ponytail: stream selesai tanpa isi = kembalikan snapshot (regenerate)
+        // atau buang bubble kosong (kirim biasa), gagalkan sekalian.
+        if (snapshot) setMessages(snapshot);
+        else setMessages((m) => m.slice(0, -1));
         throw new Error("Companion returned an empty response.");
       }
     } catch (e) {
+      if (snapshot) setMessages(snapshot);
       setError((e as Error)?.message ?? "Send failed. Please try again.");
     } finally {
       setSending(false);
@@ -478,12 +568,106 @@ export function ChatWindow() {
             className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
           >
             {m.role === "user" ? (
-              <p className="max-w-[80%] whitespace-pre-wrap rounded-3xl bg-echo-blue px-5 py-3 text-sm leading-6 text-white">
-                {m.content}
-              </p>
+              <div className="group flex max-w-[80%] flex-col items-end">
+                {editingId === m.id ? (
+                  <div className="w-full min-w-64">
+                    <textarea
+                      value={editDraft}
+                      onChange={(e) => setEditDraft(e.target.value)}
+                      rows={3}
+                      aria-label="Edit message"
+                      className="w-full resize-y rounded-3xl border border-echo-cyan/60 bg-echo-card px-5 py-3 text-sm leading-6 text-white focus:outline-none"
+                    />
+                    <div className="mt-1 flex justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingId(null);
+                        }}
+                        aria-label="Cancel edit"
+                        className="rounded-full p-1.5 text-white/50 transition hover:bg-white/5 hover:text-white"
+                      >
+                        <X size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const text = editDraft.trim();
+                          setEditingId(null);
+                          if (text && text !== m.content) {
+                            void handleSend(text);
+                          }
+                        }}
+                        aria-label="Save and resend"
+                        title="Save and resend as new message"
+                        className="rounded-full p-1.5 text-white/50 transition hover:bg-white/5 hover:text-white"
+                      >
+                        <Check size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="whitespace-pre-wrap rounded-3xl bg-echo-blue px-5 py-3 text-sm leading-6 text-white">
+                      {m.content}
+                    </p>
+                    <div className="mt-1 flex gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+                      <button
+                        type="button"
+                        onClick={() => void handleCopy(m.id, m.content)}
+                        aria-label="Copy message"
+                        title="Copy"
+                        className="rounded-full p-1.5 text-white/40 transition hover:bg-white/5 hover:text-white"
+                      >
+                        {copiedId === m.id ? <Check size={14} /> : <Copy size={14} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditDraft(m.content);
+                          setEditingId(m.id);
+                        }}
+                        aria-label="Edit message"
+                        title="Edit and resend as new"
+                        disabled={sending}
+                        className="rounded-full p-1.5 text-white/40 transition hover:bg-white/5 hover:text-white disabled:opacity-40"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             ) : (
-              <div className="max-w-[80%] rounded-3xl border border-white/10 bg-echo-card px-5 py-3 text-sm leading-6 text-white">
-                <CompanionContent content={m.content} />
+              <div className="group flex max-w-[80%] flex-col items-start">
+                <div className="rounded-3xl border border-white/10 bg-echo-card px-5 py-3 text-sm leading-6 text-white">
+                  <CompanionContent content={m.content} />
+                </div>
+                {m.content.trim() && (
+                  <div className="mt-1 flex gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+                    <button
+                      type="button"
+                      onClick={() => void handleCopy(m.id, m.content)}
+                      aria-label="Copy response"
+                      title="Copy"
+                      className="rounded-full p-1.5 text-white/40 transition hover:bg-white/5 hover:text-white"
+                    >
+                      {copiedId === m.id ? <Check size={14} /> : <Copy size={14} />}
+                    </button>
+                    {m.id === lastCompanionId && (
+                      <button
+                        type="button"
+                        onClick={handleTryAgain}
+                        aria-label="Regenerate response"
+                        title="Try again (replaces this reply)"
+                        disabled={sending || cooling}
+                        className="rounded-full p-1.5 text-white/40 transition hover:bg-white/5 hover:text-white disabled:opacity-40"
+                      >
+                        <RotateCcw size={14} />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -505,9 +689,9 @@ export function ChatWindow() {
                 <button
                   onClick={() => setGreeting(null)}
                   aria-label="Dismiss greeting"
-                  className="rounded-full px-1 text-base leading-none text-echo-muted transition hover:text-white"
+                  className="rounded-full p-1 text-echo-muted transition hover:text-white"
                 >
-                  ×
+                  <X size={14} />
                 </button>
               </div>
               <CompanionContent content={greeting} />
@@ -598,7 +782,22 @@ export function ChatWindow() {
                 : "border-white/10 text-white/50 hover:border-white/30 hover:text-white"
             }`}
           >
-            <span>⚖</span>
+            <span className="flex items-center gap-1.5"><Scale size={16} /></span>
+          </button>
+          {/* ponytail: FR-11 — toggle decision helper (§25), saling lepas dgn council. */}
+          <button
+            type="button"
+            onClick={handleDecisionToggle}
+            disabled={sending}
+            aria-pressed={decision}
+            title="Decision helper (saved to history)"
+            className={`shrink-0 rounded-full border px-4 py-3 text-sm transition disabled:opacity-40 ${
+              decision
+                ? "border-echo-cyan/60 text-echo-cyan"
+                : "border-white/10 text-white/50 hover:border-white/30 hover:text-white"
+            }`}
+          >
+            <span className="flex items-center gap-1.5"><Compass size={16} /></span>
           </button>
           <button
             type="submit"
@@ -606,7 +805,7 @@ export function ChatWindow() {
             onMouseMove={trackCursor}
             className="gradient-button shrink-0 rounded-full px-6 py-3 text-sm font-medium text-white disabled:opacity-40"
           >
-            <span>Send</span>
+            <span className="flex items-center gap-1.5">Send <SendHorizontal size={15} /></span>
           </button>
         </form>
       </div>
@@ -624,16 +823,16 @@ export function ChatWindow() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-white">
-                ⚖ Council
+              <h2 className="flex items-center gap-2 text-base font-semibold text-white">
+                <Scale size={16} /> Council
               </h2>
               <button
                 type="button"
                 onClick={() => setCouncilInfoOpen(false)}
                 aria-label="Close"
-                className="rounded-full px-2 py-1 text-white/50 hover:text-white"
+                className="rounded-full p-1 text-white/50 hover:text-white"
               >
-                ×
+                <X size={16} />
               </button>
             </div>
             <p className="text-sm leading-6 text-white/70">
@@ -671,6 +870,57 @@ export function ChatWindow() {
               className="gradient-button mt-4 w-full rounded-full px-6 py-3 text-sm font-medium text-white"
             >
               <span>Mengerti, aktifkan Council</span>
+            </button>
+          </div>
+        </div>
+      )}
+      {/* ponytail: FR-11 — modal penjelasan decision helper, pola council. */}
+      {decisionInfoOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setDecisionInfoOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="About Decision Helper"
+            className="w-full max-w-md rounded-2xl border border-white/10 bg-echo-card p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-base font-semibold text-white">
+                <Compass size={16} /> Decision Helper
+              </h2>
+              <button
+                type="button"
+                onClick={() => setDecisionInfoOpen(false)}
+                aria-label="Close"
+                className="rounded-full p-1 text-white/50 hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <p className="text-sm leading-6 text-white/70">
+              Decision Helper memecah keputusanmu menjadi opsi-opsi dengan
+              pro dan kontra tiap opsi, ditutup pertanyaan klarifikasi.
+              Tidak mengambil keputusan untukmu. Hasilnya tersimpan ke
+              history seperti chat biasa.
+            </p>
+            <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-white/70">
+              <input
+                type="checkbox"
+                checked={decisionDontShow}
+                onChange={(e) => setDecisionDontShow(e.target.checked)}
+                className="accent-cyan-400"
+              />
+              Jangan tampilkan lagi
+            </label>
+            <button
+              type="button"
+              onClick={confirmDecisionInfo}
+              className="gradient-button mt-4 w-full rounded-full px-6 py-3 text-sm font-medium text-white"
+            >
+              <span>Mengerti, aktifkan Decision Helper</span>
             </button>
           </div>
         </div>
