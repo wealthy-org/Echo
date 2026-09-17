@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { MessageSquare, NotebookPen, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import {
   PERSONALITY_PRESETS,
@@ -63,7 +64,21 @@ export function ChatSidebar({ open, onToggle, active }: ChatSidebarProps) {
         {open ? (
           <>
             <div className="flex h-[72px] shrink-0 items-center justify-between px-4">
-              <span className="font-semibold tracking-[-0.02em]">Echo</span>
+              <Link
+                href="/"
+                onClick={handleNav}
+                aria-label="Back to home"
+                className="flex items-center gap-2 rounded-lg transition hover:opacity-80"
+              >
+                <Image
+                  src="/echo-no-bg.png"
+                  alt=""
+                  width={24}
+                  height={24}
+                  className="h-6 w-6"
+                />
+                <span className="font-semibold tracking-[-0.02em]">Echo</span>
+              </Link>
               <button
                 onClick={onToggle}
                 aria-label="Collapse sidebar"
