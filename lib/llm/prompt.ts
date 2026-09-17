@@ -5,6 +5,13 @@ import {
   DEFAULT_PERSONALITY,
   PERSONALITY_PRESETS,
 } from "../companion/constants";
+import { redactPII, redactWithMap, type PiiMap } from "../pii/redact";
+
+// ponytail: §4.2 — map per request agar placeholder konsisten; tanpa map =
+// sekali pakai (summary/journal tersimpan, tak direstore).
+function scrub(content: string, map?: PiiMap): string {
+  return map ? redactWithMap(content, map) : redactPII(content);
+}
 
 export interface PromptMessage {
   role: "system" | "user" | "assistant";
@@ -28,7 +35,8 @@ export function buildChatPrompt(
   currentMessage: string,
   // ponytail: Phase 2 — slug preset ATAU teks custom user. Undefined (kolom
   // belum migrasi) = default. Custom disuntik mentah, sudah divalidasi di PATCH.
-  personality?: string | null
+  personality?: string | null,
+  map?: PiiMap
 ): PromptMessage[] {
   const messages: PromptMessage[] = [{ role: "system", content: SYSTEM_PROMPT }];
 
@@ -36,24 +44,26 @@ export function buildChatPrompt(
   const preset = PERSONALITY_PRESETS.find((p) => p.id === raw);
   messages.push({
     role: "system",
-    content: `TONE\n${preset ? preset.instruction : raw}`,
+    // ponytail: FR-08 — custom user disensor (preset slug tak perlu), memory
+    // lama yang telanjur simpan alamat ikut tersensor saat dibaca.
+    content: `TONE\n${preset ? preset.instruction : scrub(raw, map)}`,
   });
 
   if (memorySummary.trim()) {
     messages.push({
       role: "system",
-      content: `MEMORY\n${memorySummary}`,
+      content: `MEMORY\n${scrub(memorySummary, map)}`,
     });
   }
 
   for (const m of recent) {
     messages.push({
       role: m.role === "user" ? "user" : "assistant",
-      content: m.content,
+      content: scrub(m.content, map),
     });
   }
 
-  messages.push({ role: "user", content: currentMessage });
+  messages.push({ role: "user", content: scrub(currentMessage, map) });
   return messages;
 }
 
@@ -64,7 +74,7 @@ export function buildJournalPrompt(
   messages: { role: "user" | "companion"; content: string }[]
 ): PromptMessage[] {
   const convo = messages
-    .map((m) => `${m.role === "user" ? "User" : "Companion"}: ${m.content}`)
+    .map((m) => `${m.role === "user" ? "User" : "Companion"}: ${redactPII(m.content)}`)
     .join("\n");
   return [
     {
@@ -88,13 +98,14 @@ export function buildJournalPrompt(
 // SAMA dengan chat prompt agar summary konsisten dengan konteks yang dilihat user.
 export function buildSummaryPrompt(
   previousSummary: string,
-  recent: { role: "user" | "companion"; content: string }[]
+  recent: { role: "user" | "companion"; content: string }[],
+  map?: PiiMap
 ): PromptMessage[] {
   const convo = recent
-    .map((m) => `${m.role === "user" ? "User" : "Companion"}: ${m.content}`)
+    .map((m) => `${m.role === "user" ? "User" : "Companion"}: ${scrub(m.content, map)}`)
     .join("\n");
   const previous = previousSummary.trim()
-    ? `Previous summary:\n${previousSummary}\n\n`
+    ? `Previous summary:\n${scrub(previousSummary, map)}\n\n`
     : "No previous summary — this is the first one.\n\n";
   return [
     {

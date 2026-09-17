@@ -7,6 +7,11 @@ import { buildChatPrompt, buildSummaryPrompt } from "../../../lib/llm/prompt";
 import { completeChat, completeChatStream } from "../../../lib/llm/openrouter";
 import { ensureJournalUpToDate } from "../../../lib/journal/generate";
 import {
+  PLACEHOLDER_TAIL,
+  restorePlaceholders,
+  type PiiMap,
+} from "../../../lib/pii/redact";
+import {
   CHAT_RATE_LIMIT_COUNT,
   CHAT_RATE_LIMIT_DAILY_COUNT,
   CHAT_RATE_LIMIT_DAY_MS,
@@ -123,11 +128,15 @@ export async function POST(request: Request) {
   }));
 
   const trimmed = message.trim();
+  // ponytail: §4.2 — satu map per request agar placeholder konsisten di
+  // chat + summary regen; in-memory, tidak disimpan.
+  const piiMap: PiiMap = new Map();
   const prompt = buildChatPrompt(
     companion.memorySummary,
     recent,
     trimmed,
-    companion.personality
+    companion.personality,
+    piiMap
   );
   const encoder = new TextEncoder();
 
@@ -136,10 +145,27 @@ export async function POST(request: Request) {
       const send = (data: string) =>
         controller.enqueue(encoder.encode(`data: ${data}\n\n`));
       let full = "";
+      let raw = "";
+      let emitted = 0;
       try {
+        // ponytail: §4.2 restore per chunk dengan carryover — tahan ekor
+        // sepanjang placeholder max agar token terbelah antar chunk tetap
+        // pulih. Yang disimpan & dikirim = teks sudah direstore.
         for await (const delta of completeChatStream(prompt)) {
-          full += delta;
-          send(JSON.stringify(delta));
+          raw += delta;
+          const restored = restorePlaceholders(raw, piiMap);
+          const emitUpTo = Math.max(emitted, restored.length - PLACEHOLDER_TAIL);
+          const chunk = restored.slice(emitted, emitUpTo);
+          emitted = emitUpTo;
+          if (chunk) {
+            full += chunk;
+            send(JSON.stringify(chunk));
+          }
+        }
+        const rest = restorePlaceholders(raw, piiMap).slice(emitted);
+        if (rest) {
+          full += rest;
+          send(JSON.stringify(rest));
         }
         // ponytail: persist setelah complete — stream putus = tidak ada yang
         // tersimpan (parsial tidak ditampilkan ulang saat refresh, jujur).
@@ -169,7 +195,7 @@ export async function POST(request: Request) {
                 ...recent,
                 { role: "user", content: trimmed },
                 { role: "companion", content: full },
-              ])
+              ], piiMap)
             );
             await db
               .update(companions)
