@@ -3,6 +3,8 @@
 // (langit-langit: nama tempat/judul ikut kena; restore menutupinya di tampilan).
 
 const EVM_ADDRESS = /0x[a-fA-F0-9]{40}/g;
+// ponytail: gaya Etherscan terpotong (0x9f2c...8e1d) — tanpa ini bocor apa adanya.
+const EVM_ADDRESS_SHORT = /0x[a-fA-F0-9]{4,}(?:\.{2,}|…)[a-fA-F0-9]{3,}/g;
 // ponytail: min 2 kata kapital berurutan — 1 kata (awal kalimat) sengaja lolos.
 const NAME_LIKE = /\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})+)\b/g;
 
@@ -15,16 +17,19 @@ function nextToken(map: PiiMap, prefix: string, value: string): string {
   for (const [token, v] of map) {
     if (v === value && token.startsWith(prefix)) return token;
   }
-  let n = 1;
+  let n = 0;
   while (map.has(`${prefix}${n}]`)) n++;
   const token = `${prefix}${n}]`;
   map.set(token, value);
   return token;
 }
 
-// ponytail: wallet dulu, lalu nama — agar alamat tak termakan pola nama.
+// ponytail: wallet dulu (utuh + terpotong), lalu nama — agar alamat
+// tak termakan pola nama.
 export function redactWithMap(text: string, map: PiiMap): string {
-  const wallets = text.replace(EVM_ADDRESS, (m) => nextToken(map, "[WALLET_", m));
+  const wallets = text
+    .replace(EVM_ADDRESS_SHORT, (m) => nextToken(map, "[WALLET_", m))
+    .replace(EVM_ADDRESS, (m) => nextToken(map, "[WALLET_", m));
   return wallets.replace(NAME_LIKE, (m) => nextToken(map, "[NAME_", m));
 }
 
