@@ -5,16 +5,46 @@ import {
   Check,
   Compass,
   Copy,
+  Mic,
   Pencil,
   RotateCcw,
   Scale,
   SendHorizontal,
+  Square,
+  Volume2,
+  VolumeX,
   X,
 } from "lucide-react";
 import { MAX_MESSAGE_LENGTH } from "../../lib/chat/constants";
 import { CompanionContent } from "./message-content";
 
 // ponytail: 1 file untuk list + input + send + loading/error (PRD Phase 6).
+// ponytail: TTS — belah per kalimat (sembuhnya bug penggal Chrome),
+// potongan >200 char belah lagi di spasi terdekat.
+function chunkSentences(text: string): string[] {
+  const out: string[] = [];
+  for (const s of text.split(/(?<=[.!?…\n])\s+/)) {
+    let rest = s.trim();
+    while (rest.length > 200) {
+      const cut = rest.lastIndexOf(" ", 200);
+      const at = cut > 80 ? cut : 200;
+      out.push(rest.slice(0, at).trim());
+      rest = rest.slice(at).trim();
+    }
+    if (rest) out.push(rest);
+  }
+  return out.filter(Boolean).slice(0, 50);
+}
+
+// ponytail: baca preferensi autoplay (SSR-safe, storage bisa dilempar).
+function readAutoplay(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem("echo-autoplay") === "1";
+  } catch {
+    return false;
+  }
+}
 // Visual ikut sistem docs/reference (token echo-*, kartu #19191b, gradient-button).
 // Kontrak Phase 8: POST /api/chat { message } -> SSE `data: <delta-json>`, tutup `[DONE]`.
 // Phase 9 tinggal hook memory regen setelah stream selesai — bubble tak berubah.
@@ -70,6 +100,59 @@ function formatCooldown(total: number) {
   const s = total % 60;
   const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
   return `${h > 0 ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}`;
+}
+
+// ponytail: Fase 2 voice — Web Speech API browser, tanpa API tambahan.
+// TTS baca teks polos: markdown dilucuti seadanya agar tak dibaca simbolnya.
+function stripForSpeech(md: string) {
+  return md
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[#>*_`~|-]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// ponytail: tipe minimal Web Speech API (tak ada di lib.dom TS ini).
+interface SpeechAlternative {
+  transcript?: unknown;
+}
+interface SpeechResult {
+  0?: SpeechAlternative;
+  isFinal?: boolean;
+}
+interface SpeechResultList {
+  length: number;
+  [index: number]: SpeechResult | undefined;
+}
+interface SpeechEvent {
+  results?: SpeechResultList;
+  resultIndex?: number;
+}
+interface SpeechRecognizer {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((e: SpeechEvent) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+
+// ponytail: jumlah dot waveform dictation — dipakai render + loop meter.
+const DOT_COUNT = 24;
+
+// ponytail: webkitSpeechRecognition tak ada di lib.dom — ambil dgn guard.
+function getSpeechRecognition(): (new () => SpeechRecognizer) | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as {
+    SpeechRecognition?: new () => SpeechRecognizer;
+    webkitSpeechRecognition?: new () => SpeechRecognizer;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
 export function ChatWindow() {
@@ -202,6 +285,85 @@ export function ChatWindow() {
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
+  // ponytail: voice — STT guard sekali (Firefox desktop tak support),
+  // TTS id bubble yg sedang dibacakan (null = diam).
+  // Dictation ala ChatGPT: overlay pill, X buang / ✓ append ke draft.
+  const [dictating, setDictating] = useState(false);
+  const [dictation, setDictation] = useState("");
+  const finalRef = useRef("");
+  // ponytail: meter level suara — tulis tinggi dot langsung via ref,
+  // tanpa setState (tanpa re-render 60fps).
+  const dotRefs = useRef<(HTMLSpanElement | null)[]>([]);
+  const audioRef = useRef<{
+    ctx: AudioContext;
+    stream: MediaStream;
+    raf: number;
+  } | null>(null);
+
+  function stopLevelMeter() {
+    const a = audioRef.current;
+    audioRef.current = null;
+    if (!a) return;
+    cancelAnimationFrame(a.raf);
+    a.stream.getTracks().forEach((t) => t.stop());
+    a.ctx.close().catch(() => {});
+  }
+
+  function startLevelMeter() {
+    stopLevelMeter();
+    if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      return;
+    }
+    void navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then((stream) => {
+        const AC =
+          window.AudioContext ??
+          (window as unknown as { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
+        if (!AC) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        const ctx = new AC();
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        ctx.createMediaStreamSource(stream).connect(analyser);
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        const tick = () => {
+          if (!audioRef.current) return;
+          analyser.getByteTimeDomainData(data);
+          let peak = 0;
+          for (let i = 0; i < data.length; i++) {
+            const v = Math.abs((data[i] ?? 128) - 128) / 128;
+            if (v > peak) peak = v;
+          }
+          const lvl = Math.min(1, peak * 1.6);
+          const now = Date.now() / 180;
+          for (let i = 0; i < DOT_COUNT; i++) {
+            const el = dotRefs.current[i];
+            if (!el) continue;
+            const wave = 0.55 + 0.45 * Math.sin(now + i * 0.7);
+            el.style.height = `${(4 + lvl * 22 * wave).toFixed(1)}px`;
+            el.style.opacity = String(0.35 + lvl * 0.65);
+          }
+          if (audioRef.current) {
+            audioRef.current.raf = requestAnimationFrame(tick);
+          }
+        };
+        audioRef.current = { ctx, stream, raf: requestAnimationFrame(tick) };
+      })
+      .catch(() => {
+        // ponytail: izin meter ditolak — STT tetap jalan, dot statis.
+      });
+  }
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const recogRef = useRef<SpeechRecognizer | null>(null);
+  const sttSupported = getSpeechRecognition() !== null;
+  const ttsSupported =
+    typeof window !== "undefined" && "speechSynthesis" in window;
+  // ponytail: autoplay TTS tiap balasan baru (default mati, ingat pilihan).
+  const [autoplay, setAutoplay] = useState(readAutoplay);
 
   async function handleCopy(id: string, content: string) {
     try {
@@ -241,6 +403,150 @@ export function ChatWindow() {
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }
+
+  // ponytail: mic buka overlay dictation — final terakumulasi di ref,
+  // interim tampil live. X = buang, ✓ = append ke draft (tak auto-send).
+  // Hening lama = recog mati sendiri -> start ulang selama overlay buka.
+  function handleMic() {
+    if (dictating) return;
+    const SR = getSpeechRecognition();
+    if (!SR) {
+      setError("Voice input is not supported in this browser.");
+      return;
+    }
+    finalRef.current = "";
+    setDictation("");
+    const startRecog = () => {
+      const recog = new SR();
+      recog.lang = "id-ID";
+      recog.continuous = true;
+      recog.interimResults = true;
+      recog.maxAlternatives = 1;
+      recogRef.current = recog;
+      recog.onresult = (e: SpeechEvent) => {
+        const list = e.results;
+        if (!list) return;
+        let interim = "";
+        for (let i = e.resultIndex ?? 0; i < list.length; i++) {
+          const raw = list[i]?.[0]?.transcript;
+          const text = typeof raw === "string" ? raw.trim() : "";
+          if (!text) continue;
+          if (list[i]?.isFinal) {
+            finalRef.current = `${finalRef.current} ${text}`.trim();
+          } else {
+            interim = `${interim} ${text}`.trim();
+          }
+        }
+        setDictation(`${finalRef.current} ${interim}`.trim());
+      };
+      recog.onerror = () => {
+        if (!recogRef.current) return; // abort() saat cancel — abaikan.
+        recogRef.current = null;
+        stopLevelMeter();
+        finalRef.current = "";
+        setDictation("");
+        setDictating(false);
+        setError("Voice input failed. Check microphone permission and try again.");
+      };
+      recog.onend = () => {
+        if (!recogRef.current) return; // stop()/abort() disengaja — abaikan.
+        startRecog(); // hening lama: sambung lagi, teks lama aman di ref.
+      };
+      try {
+        recog.start();
+      } catch {
+        recogRef.current = null;
+        stopLevelMeter();
+        setError("Voice input failed. Please try again.");
+      }
+    };
+    startRecog();
+    startLevelMeter();
+    setDictating(true);
+  }
+
+  function cancelDictation() {
+    const recog = recogRef.current;
+    recogRef.current = null;
+    recog?.abort();
+    stopLevelMeter();
+    finalRef.current = "";
+    setDictation("");
+    setDictating(false);
+  }
+
+  function confirmDictation() {
+    const text = finalRef.current.trim();
+    const recog = recogRef.current;
+    recogRef.current = null;
+    recog?.stop();
+    stopLevelMeter();
+    if (text) {
+      setDraft((d) => {
+        const next = d.trim() ? `${d.trim()} ${text}` : text;
+        return next.slice(0, MAX_MESSAGE_LENGTH);
+      });
+      requestAnimationFrame(autoresize);
+    }
+    finalRef.current = "";
+    setDictation("");
+    setDictating(false);
+  }
+
+  // ponytail: speaker per bubble — antre per kalimat via onend.
+  // Klik lagi = stop. Unmount/kirim baru = diam.
+  function speakChunks(id: string, content: string) {
+    if (!ttsSupported) return;
+    window.speechSynthesis.cancel();
+    const chunks = chunkSentences(stripForSpeech(content));
+    if (chunks.length === 0) return;
+    setSpeakingId(id);
+    let i = 0;
+    const next = () => {
+      const text = chunks[i];
+      if (text === undefined) {
+        setSpeakingId(null);
+        return;
+      }
+      i++;
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = "id-ID";
+      utter.onend = next;
+      utter.onerror = () => setSpeakingId(null);
+      window.speechSynthesis.speak(utter);
+    };
+    next();
+  }
+
+  function handleSpeak(id: string, content: string) {
+    if (!ttsSupported) return;
+    if (speakingId === id) {
+      window.speechSynthesis.cancel();
+      setSpeakingId(null);
+      return;
+    }
+    speakChunks(id, content);
+  }
+
+  function toggleAutoplay() {
+    const next = !autoplay;
+    try {
+      window.localStorage.setItem("echo-autoplay", next ? "1" : "0");
+    } catch {
+      // storage penuh/diblokir — pilihan sesi ini saja.
+    }
+    setAutoplay(next);
+  }
+
+  useEffect(() => {
+    return () => {
+      recogRef.current?.abort();
+      stopLevelMeter();
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -404,6 +710,9 @@ export function ChatWindow() {
   ) {
     const message = (textOverride ?? draft).trim();
     if (!message || sending) return;
+    // ponytail: kirim baru = suara lama berhenti (tak menumpuk).
+    if (ttsSupported) window.speechSynthesis.cancel();
+    setSpeakingId(null);
     // ponytail: FR-11 — kirim dibuang selama cooldown (input sudah dikunci,
     // ini jaring pengaman Enter/keyboard).
     if (cooldownUntil > Date.now()) return;
@@ -474,9 +783,10 @@ export function ChatWindow() {
       // ponytail: regenerate — bubble user sudah dikembalikan sinkron di atas,
       // di sini tinggal bubble companion kosong untuk stream.
       // server menyimpan ulang pair user+companion sehingga tampilan = DB.
+      const companionId = crypto.randomUUID();
       setMessages((m) => [
         ...m,
-        { id: crypto.randomUUID(), role: "companion", content: "" },
+        { id: companionId, role: "companion", content: "" },
       ]);
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -525,6 +835,10 @@ export function ChatWindow() {
         if (snapshot) setMessages(snapshot);
         else setMessages((m) => m.slice(0, -1));
         throw new Error("Companion returned an empty response.");
+      }
+      // ponytail: autoplay — balasan lengkap dibacakan sendiri.
+      if (window.localStorage.getItem("echo-autoplay") === "1") {
+        speakChunks(companionId, reply);
       }
     } catch (e) {
       if (snapshot) setMessages(snapshot);
@@ -663,6 +977,17 @@ export function ChatWindow() {
                     >
                       {copiedId === m.id ? <Check size={14} /> : <Copy size={14} />}
                     </button>
+                    {ttsSupported && (
+                      <button
+                        type="button"
+                        onClick={() => handleSpeak(m.id, m.content)}
+                        aria-label={speakingId === m.id ? "Stop reading aloud" : "Read aloud"}
+                        title={speakingId === m.id ? "Stop" : "Read aloud"}
+                        className="rounded-full p-1.5 text-white/40 transition hover:bg-white/5 hover:text-white"
+                      >
+                        {speakingId === m.id ? <Square size={14} /> : <Volume2 size={14} />}
+                      </button>
+                    )}
                     {m.id === lastCompanionId && (
                       <button
                         type="button"
@@ -754,6 +1079,50 @@ export function ChatWindow() {
             {draft.length}/{MAX_MESSAGE_LENGTH}
           </span>
         </div>
+        {/* ponytail: overlay dictation ala ChatGPT gantikan bar input. */}
+        {dictating ? (
+          <div
+            role="status"
+            aria-label="Dictating"
+            className="mx-auto flex w-full max-w-[68rem] items-center px-5 py-3"
+          >
+            <div className="flex min-w-0 flex-1 items-center gap-3 rounded-full bg-white/10 px-5 py-3">
+              <div className="flex shrink-0 items-center gap-1" aria-hidden="true">
+                {Array.from({ length: DOT_COUNT }).map((_, i) => (
+                  <span
+                    key={i}
+                    ref={(el) => {
+                      dotRefs.current[i] = el;
+                    }}
+                    style={{ height: 6 }}
+                    className="w-1.5 rounded-full bg-white/70"
+                  />
+                ))}
+              </div>
+              <p className="min-w-0 flex-1 truncate text-sm text-white/80">
+                {dictation || "Listening…"}
+              </p>
+              <button
+                type="button"
+                onClick={cancelDictation}
+                aria-label="Cancel dictation"
+                title="Cancel"
+                className="shrink-0 rounded-full p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white"
+              >
+                <X size={18} />
+              </button>
+              <button
+                type="button"
+                onClick={confirmDictation}
+                aria-label="Use dictation"
+                title="Use dictation"
+                className="shrink-0 rounded-full p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white"
+              >
+                <Check size={20} />
+              </button>
+            </div>
+          </div>
+        ) : (
         <form
           className="mx-auto flex w-full max-w-[68rem] items-end gap-2 px-5 py-3"
           onSubmit={(e) => {
@@ -779,6 +1148,36 @@ export function ChatWindow() {
             disabled={sending || cooling}
             className="max-h-40 min-w-0 flex-1 resize-none overflow-y-auto rounded-3xl border border-white/10 bg-echo-card px-5 py-3 text-sm leading-6 text-white placeholder:text-white/30 focus:border-white/40 focus:outline-none"
           />
+          {sttSupported && (
+            <button
+              type="button"
+              onClick={handleMic}
+              disabled={sending || cooling}
+              title="Voice input"
+              className="shrink-0 rounded-full border border-white/10 px-4 py-3 text-sm text-white/50 transition hover:border-white/30 hover:text-white disabled:opacity-40"
+            >
+              <span className="flex items-center gap-1.5"><Mic size={16} /></span>
+            </button>
+          )}
+          {/* ponytail: autoplay TTS tiap balasan baru — ingat pilihan. */}
+          {ttsSupported && (
+            <button
+              type="button"
+              onClick={toggleAutoplay}
+              disabled={sending}
+              aria-pressed={autoplay}
+              title={autoplay ? "Autoplay replies: on" : "Autoplay replies: off"}
+              className={`shrink-0 rounded-full border px-4 py-3 text-sm transition disabled:opacity-40 ${
+                autoplay
+                  ? "border-echo-cyan/60 text-echo-cyan"
+                  : "border-white/10 text-white/50 hover:border-white/30 hover:text-white"
+              }`}
+            >
+              <span className="flex items-center gap-1.5">
+                {autoplay ? <Volume2 size={16} /> : <VolumeX size={16} />}
+              </span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void handleCouncilToggle()}
@@ -817,6 +1216,7 @@ export function ChatWindow() {
             <span className="flex items-center gap-1.5">Send <SendHorizontal size={15} /></span>
           </button>
         </form>
+        )}
       </div>
       {/* ponytail: FR-09 — modal penjelasan council, pola sama seperti modal Profile. */}
       {councilInfoOpen && (
