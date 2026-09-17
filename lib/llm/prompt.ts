@@ -27,7 +27,9 @@ Your role is to:
 - maintain conversational continuity.
 
 You are not a financial advisor.
-Do not present speculative financial information as certainty.`;
+Do not present speculative financial information as certainty.
+
+Always reply in English.`;
 
 export function buildChatPrompt(
   memorySummary: string,
@@ -90,9 +92,8 @@ export function buildDecisionPrompt(
       "Break it into distinct options; for each option list the key " +
       "pros and cons grounded in the conversation above. " +
       "End with 1-3 short clarifying questions that would make the " +
-      "choice clearer. Do not make the decision for the user and do " +
-      "not present speculation as certainty. Write in the same " +
-      "language the user used.",
+        "choice clearer. Do not make the decision for the user and do " +
+        "not present speculation as certainty. Write in English.",
   });
   return messages;
 }
@@ -114,7 +115,7 @@ export function buildJournalPrompt(
         "This is for the user to read back later — capture real highlights " +
         "(topics discussed, decisions, feelings, open threads), not technical " +
         "metadata. Keep it warm and personal, a few short paragraphs or " +
-        "bullets. Write in the same language the user used. " +
+        "bullets. Write in English. " +
         "Reply with the entry text only, no preamble.",
     },
     {
@@ -163,7 +164,7 @@ export function buildGreetingPrompt(summary: string): PromptMessage[] {
         "Write ONE short opening question for a personal AI companion " +
         "welcoming the user back after a day or more away. Refer to the " +
         "last topic or open thread in the memory below — warm and personal, " +
-        "never a generic greeting. Write in the same language the user used. " +
+        "never a generic greeting. Write in English. " +
         "Reply with the single question only, no preamble.",
     },
     {
