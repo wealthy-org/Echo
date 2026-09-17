@@ -21,6 +21,30 @@ interface HistoryRow {
   content?: unknown;
 }
 
+// ponytail: FR-09 council — hasil eksploratif, tidak masuk history.
+interface CouncilSide {
+  model?: unknown;
+  content?: unknown;
+}
+
+interface CouncilResult {
+  a: CouncilSide;
+  b: CouncilSide;
+}
+
+interface CouncilQA {
+  question: string;
+  result: {
+    a: { model: string; content: string };
+    b: { model: string; content: string };
+  };
+}
+
+function toCouncilSide(s: CouncilSide): { model: string; content: string } | null {
+  if (typeof s.model !== "string" || typeof s.content !== "string") return null;
+  return { model: s.model, content: s.content };
+}
+
 // ponytail: baris history valid = id string + role dikenal + content string.
 function toChatMessage(m: HistoryRow): ChatMessage | null {
   if (typeof m.id !== "string") return null;
@@ -38,6 +62,8 @@ export function ChatWindow() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [council, setCouncil] = useState(false);
+  const [councilQA, setCouncilQA] = useState<CouncilQA | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // ponytail: Phase 2 infinite scroll — cursor di ref (baca fresh di observer),
@@ -170,7 +196,35 @@ export function ChatWindow() {
 
   useEffect(() => {
     if (stickRef.current) bottomRef.current?.scrollIntoView();
-  }, [messages, sending]);
+  }, [messages, sending, councilQA]);
+
+  // ponytail: FR-09 — non-streaming, satu blok terbaru saja (eksploratif).
+  async function handleCouncilSend(message: string) {
+    setDraft("");
+    if (inputRef.current) inputRef.current.style.height = "auto";
+    setError(null);
+    setCouncilQA(null);
+    setSending(true);
+    try {
+      const res = await fetch("/api/council", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error?.message ?? "Comparison failed.");
+      }
+      const a = toCouncilSide((data as CouncilResult)?.a ?? {});
+      const b = toCouncilSide((data as CouncilResult)?.b ?? {});
+      if (!a || !b) throw new Error("Comparison returned an invalid response.");
+      setCouncilQA({ question: message, result: { a, b } });
+    } catch (e) {
+      setError((e as Error)?.message ?? "Comparison failed. Please try again.");
+    } finally {
+      setSending(false);
+    }
+  }
 
   async function handleSend() {
     const message = draft.trim();
@@ -178,6 +232,11 @@ export function ChatWindow() {
     // ponytail: validasi panjang di client dulu — error muncul sebelum request.
     if (message.length > MAX_MESSAGE_LENGTH) {
       setError(`Message too long (max ${MAX_MESSAGE_LENGTH} characters).`);
+      return;
+    }
+    // ponytail: FR-09 — council terpisah dari alur chat utama (tanpa simpan).
+    if (council) {
+      await handleCouncilSend(message);
       return;
     }
     setDraft("");
@@ -314,8 +373,31 @@ export function ChatWindow() {
         {sending && !streamed && (
           <div className="flex justify-start">
             <p className="animate-pulse rounded-3xl border border-white/10 bg-echo-card px-5 py-3 text-sm text-echo-muted/60">
-              Echo is typing…
+              {council ? "Comparing models…" : "Echo is typing…"}
             </p>
+          </div>
+        )}
+        {councilQA && (
+          <div className="rounded-3xl border border-echo-cyan/20 bg-black/30 p-4">
+            <p className="mb-1 text-xs uppercase tracking-[0.2em] text-echo-cyan">
+              Council
+            </p>
+            <p className="mb-3 whitespace-pre-wrap text-sm leading-6 text-white/80">
+              {councilQA.question}
+            </p>
+            <div className="grid gap-3 md:grid-cols-2">
+              {[councilQA.result.a, councilQA.result.b].map((side) => (
+                <div
+                  key={side.model}
+                  className="rounded-2xl border border-white/10 bg-echo-card px-4 py-3 text-sm leading-6 text-white"
+                >
+                  <p className="mb-2 truncate text-xs text-echo-muted/60">
+                    {side.model}
+                  </p>
+                  <CompanionContent content={side.content} />
+                </div>
+              ))}
+            </div>
           </div>
         )}
         <div ref={bottomRef} />
@@ -354,6 +436,20 @@ export function ChatWindow() {
             aria-label="Chat message"
             className="max-h-40 min-w-0 flex-1 resize-none overflow-y-auto rounded-3xl border border-white/10 bg-echo-card px-5 py-3 text-sm leading-6 text-white placeholder:text-white/30 focus:border-white/40 focus:outline-none"
           />
+          <button
+            type="button"
+            onClick={() => setCouncil((v) => !v)}
+            disabled={sending}
+            aria-pressed={council}
+            title="Compare two models side by side (not saved)"
+            className={`shrink-0 rounded-full border px-4 py-3 text-sm transition disabled:opacity-40 ${
+              council
+                ? "border-echo-cyan/60 text-echo-cyan"
+                : "border-white/10 text-white/50 hover:border-white/30 hover:text-white"
+            }`}
+          >
+            <span>⚖</span>
+          </button>
           <button
             type="submit"
             disabled={!draft.trim() || sending || tooLong}

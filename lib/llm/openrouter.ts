@@ -11,6 +11,12 @@ export function getChatModel(): string {
   return process.env.OPENROUTER_MODEL || "openrouter/free";
 }
 
+// ponytail: FR-09 council — model B via env, default = ID :free yang hidup
+// per 2026-09-17. Roster rotasi; ganti via env tanpa deploy bila 404 lagi.
+export function getCouncilModel(): string {
+  return process.env.OPENROUTER_MODEL_SECONDARY || "google/gemma-4-31b-it:free";
+}
+
 function requireKey(): string {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
@@ -29,15 +35,39 @@ function buildHeaders(apiKey: string) {
   };
 }
 
-export async function completeChat(messages: PromptMessage[]): Promise<string> {
+// ponytail: error bawa status upstream agar route bisa teruskan 429/404
+// apa adanya (detail mentah tetap di server log, tak ke klien).
+export function upstreamStatus(e: unknown): number | undefined {
+  const s = (e as { upstreamStatus?: unknown })?.upstreamStatus;
+  return typeof s === "number" ? s : undefined;
+}
+
+async function upstreamError(res: Response): Promise<Error> {
+  let detail = "";
+  try {
+    const body = (await res.json()) as { error?: { message?: unknown } };
+    if (typeof body?.error?.message === "string") detail = body.error.message;
+  } catch {
+    // ponytail: body bukan JSON = abaikan, status cukup.
+  }
+  const message = detail
+    ? `OpenRouter ${res.status}: ${detail}`
+    : `OpenRouter request failed with status ${res.status}`;
+  return Object.assign(new Error(message), { upstreamStatus: res.status });
+}
+
+export async function completeChat(
+  messages: PromptMessage[],
+  model?: string
+): Promise<string> {
   const res = await fetch(OPENROUTER_URL, {
     method: "POST",
     headers: buildHeaders(requireKey()),
-    body: JSON.stringify({ model: getChatModel(), messages }),
+    body: JSON.stringify({ model: model ?? getChatModel(), messages }),
   });
 
   if (!res.ok) {
-    throw new Error(`OpenRouter request failed with status ${res.status}`);
+    throw await upstreamError(res);
   }
 
   const data = (await res.json()) as {
@@ -61,7 +91,7 @@ export async function* completeChatStream(
     body: JSON.stringify({ model: getChatModel(), messages, stream: true }),
   });
   if (!res.ok || !res.body) {
-    throw new Error(`OpenRouter request failed with status ${res.status}`);
+    throw await upstreamError(res);
   }
 
   const reader = res.body.getReader();
