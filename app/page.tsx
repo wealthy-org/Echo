@@ -1,9 +1,42 @@
 // ponytail: landing statis + 1 pulau client (interactive.tsx). CTA connect via ConnectButton (Phase 3).
 import Image from "next/image";
-import { GradientLink, MobileMenu } from "../components/landing/interactive";
-import { DesktopNav, SectionHeading, StepCard } from "../components/landing/section";
+import { MobileMenu } from "../components/landing/interactive";
+import { DesktopNav, FeatureCard, SectionHeading, StepCard } from "../components/landing/section";
 import { HeroActions } from "../components/landing/hero-actions";
 import { ConnectButton } from "../components/wallet/connect-button";
+
+const FEATURES = [
+  {
+    title: "Memory that lasts",
+    description:
+      "Your companion summarizes past conversations and recalls the context next time you return.",
+  },
+  {
+    title: "Daily journal",
+    description:
+      "Highlights of each day's conversation, readable anytime on a dedicated journal page.",
+  },
+  {
+    title: "PII redaction",
+    description:
+      "Names and wallet addresses are masked before reaching the AI model, restored only on your screen.",
+  },
+  {
+    title: "Council",
+    description:
+      "Compare answers from two free models side by side — exploratory, never saved to history.",
+  },
+  {
+    title: "Decision helper",
+    description:
+      "Break a decision into options with pros, cons, and clarifying questions.",
+  },
+  {
+    title: "Proactive greeting",
+    description:
+      "Come back after a day away and get an opening question from your last topic.",
+  },
+];
 
 const STEPS = [
   {
@@ -83,6 +116,24 @@ export default function Home() {
           muted="Owned by your wallet."
           description="Your wallet is your identity. Each wallet gets one companion that keeps history and builds memory, so it feels like it knows you."
         />
+      </section>
+
+      {/* Features */}
+      <section
+        id="features"
+        className="mx-auto max-w-[68rem] scroll-mt-24 px-5 py-24 lg:px-0 lg:py-32"
+      >
+        <SectionHeading
+          eyebrow="Features"
+          accent="text-[#b354fe]"
+          title="Everything a companion needs."
+          description="Memory, reflection, and thinking tools — personal context that grows with every conversation."
+        />
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {FEATURES.map((f) => (
+            <FeatureCard key={f.title} title={f.title} description={f.description} />
+          ))}
+        </div>
       </section>
 
       {/* How it works */}

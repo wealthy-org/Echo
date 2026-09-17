@@ -50,6 +50,21 @@ export function StepCard({
   );
 }
 
+export function FeatureCard({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <article className="rounded-3xl border border-white/10 bg-[#19191b] p-7">
+      <h3 className="text-xl font-semibold text-white">{title}</h3>
+      <p className="mt-3 text-sm leading-6 text-[#c3c6cd]/55">{description}</p>
+    </article>
+  );
+}
+
 export function DesktopNav() {
   return (
     <nav className="hidden items-center gap-8 text-[13px] text-[#c3c6cd] md:flex">
