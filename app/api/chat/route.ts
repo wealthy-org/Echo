@@ -5,6 +5,7 @@ import { db } from "../../../lib/db";
 import { getSession } from "../../../lib/auth/session";
 import { buildChatPrompt, buildSummaryPrompt } from "../../../lib/llm/prompt";
 import { completeChat, completeChatStream } from "../../../lib/llm/openrouter";
+import { ensureJournalUpToDate } from "../../../lib/journal/generate";
 import {
   CHAT_RATE_LIMIT_COUNT,
   CHAT_RATE_LIMIT_DAILY_COUNT,
@@ -178,6 +179,9 @@ export async function POST(request: Request) {
             console.error("memory regen failed:", e);
           }
         }
+        // ponytail: FR-07 fallback — user yang langsung kirim tanpa load
+        // history tetap memicu journal. Idempoten, gagal = log saja.
+        await ensureJournalUpToDate(companion.id);
       } catch (e) {
         console.error("chat stream failed:", e);
         send(

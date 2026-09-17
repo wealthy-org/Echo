@@ -1,0 +1,455 @@
+{
+  "version": "8",
+  "dialect": "postgres",
+  "id": "aa2f356b-3b56-4834-9338-c512c8ae7ce3",
+  "prevIds": [
+    "e0f7f343-4394-4b40-9885-eefd3dd770d2"
+  ],
+  "ddl": [
+    {
+      "isRlsEnabled": false,
+      "name": "chat_messages",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "companions",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "journal_entries",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "chat_messages"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "companion_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "chat_messages"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": {
+        "type": "always",
+        "name": "chat_messages_seq_seq",
+        "increment": "1",
+        "startWith": "1",
+        "minValue": "1",
+        "maxValue": "2147483647",
+        "cache": 1,
+        "cycle": false
+      },
+      "name": "seq",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "chat_messages"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "role",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "chat_messages"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "content",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "chat_messages"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "chat_messages"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "companions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "wallet_address",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "companions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'Companion'",
+      "generated": null,
+      "identity": null,
+      "name": "companion_name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "companions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'balanced'",
+      "generated": null,
+      "identity": null,
+      "name": "personality",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "companions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "''",
+      "generated": null,
+      "identity": null,
+      "name": "memory_summary",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "companions"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "message_count",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "companions"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "messages_since_summary",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "companions"
+    },
+    {
+      "type": "date",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "last_active_date",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "companions"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "companions"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "journal_entries"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "companion_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "journal_entries"
+    },
+    {
+      "type": "date",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "entry_date",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "journal_entries"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "highlights",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "journal_entries"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "journal_entries"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "companion_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": false,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_chat_messages_companion_created",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "chat_messages"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "companion_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "entry_date",
+          "isExpression": false,
+          "asc": false,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_journal_entries_companion_entry",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "journal_entries"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "companion_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "companions",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "chat_messages_companion_id_companions_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "chat_messages"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "companion_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "companions",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "journal_entries_companion_id_companions_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "journal_entries"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "chat_messages_pkey",
+      "schema": "public",
+      "table": "chat_messages",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "companions_pkey",
+      "schema": "public",
+      "table": "companions",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "journal_entries_pkey",
+      "schema": "public",
+      "table": "journal_entries",
+      "entityType": "pks"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "companion_id",
+        "entry_date"
+      ],
+      "nullsNotDistinct": false,
+      "name": "journal_entries_companion_entry_unique",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "journal_entries"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "wallet_address"
+      ],
+      "nullsNotDistinct": false,
+      "name": "companions_wallet_address_key",
+      "schema": "public",
+      "table": "companions",
+      "entityType": "uniques"
+    },
+    {
+      "value": "\"role\" IN ('user', 'companion')",
+      "name": "chat_messages_role",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "chat_messages"
+    },
+    {
+      "value": "\"wallet_address\" = lower(\"wallet_address\")",
+      "name": "companions_wallet_lowercase",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "companions"
+    }
+  ],
+  "renames": []
+}

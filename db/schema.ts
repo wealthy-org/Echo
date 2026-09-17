@@ -1,11 +1,13 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  date,
   index,
   integer,
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -25,6 +27,9 @@ export const companions = pgTable(
     messagesSinceSummary: integer("messages_since_summary")
       .notNull()
       .default(0),
+    // ponytail: FR-07 journal — hari UTC terakhir ada aktivitas. NULL (baris
+    // lama) = dianggap hari ini saat pertama dibaca, tanpa backfill.
+    lastActiveDate: date("last_active_date"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -66,3 +71,32 @@ export type Companion = typeof companions.$inferSelect;
 export type NewCompanion = typeof companions.$inferInsert;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type NewChatMessage = typeof chatMessages.$inferInsert;
+
+// ponytail: FR-07 journal — 1 entri per companion per hari (PRD §13/§18).
+export const journalEntries = pgTable(
+  "journal_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companionId: uuid("companion_id")
+      .notNull()
+      .references(() => companions.id, { onDelete: "cascade" }),
+    entryDate: date("entry_date").notNull(),
+    highlights: text("highlights").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    unique("journal_entries_companion_entry_unique").on(
+      t.companionId,
+      t.entryDate
+    ),
+    index("idx_journal_entries_companion_entry").on(
+      t.companionId,
+      t.entryDate.desc()
+    ),
+  ]
+);
+
+export type JournalEntry = typeof journalEntries.$inferSelect;
+export type NewJournalEntry = typeof journalEntries.$inferInsert;

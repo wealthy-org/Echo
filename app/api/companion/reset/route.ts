@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { chatMessages, companions } from "../../../../db/schema";
+import { chatMessages, companions, journalEntries } from "../../../../db/schema";
 import { db } from "../../../../lib/db";
 import { getSession } from "../../../../lib/auth/session";
 
 // ponytail: FR-10 — hapus history + nol-kan memory/counter dalam 1 transaksi.
 // companion_name & created_at tidak disentuh (known since tetap).
+// ponytail: FR-07 — journal_entries ikut dihapus (PRD §14).
 
 export async function POST() {
   const session = await getSession();
@@ -22,6 +23,9 @@ export async function POST() {
       await tx
         .delete(chatMessages)
         .where(eq(chatMessages.companionId, companionId));
+      await tx
+        .delete(journalEntries)
+        .where(eq(journalEntries.companionId, companionId));
       await tx
         .update(companions)
         .set({ memorySummary: "", messageCount: 0, messagesSinceSummary: 0 })

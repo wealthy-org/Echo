@@ -3,6 +3,7 @@ import { and, desc, eq, lt } from "drizzle-orm";
 import { chatMessages } from "../../../../db/schema";
 import { db } from "../../../../lib/db";
 import { getSession } from "../../../../lib/auth/session";
+import { ensureJournalUpToDate } from "../../../../lib/journal/generate";
 
 // ponytail: Phase 2 cursor pagination — keyset seq (urutan total insert).
 // createdAt kembar per pasang + id acak tidak bisa jadi tumpuan.
@@ -36,6 +37,11 @@ export async function GET(request: Request) {
     }
     cursor = parsed;
   }
+
+  // ponytail: FR-07 — buka chat di hari berbeda = generate journal kemarin
+  // (1x/hari saja yang kena, hari biasa cuma bandingkan tanggal).
+  // Gagal generate tidak menggagalkan history.
+  await ensureJournalUpToDate(session.companionId);
 
   const rows = await db
     .select({

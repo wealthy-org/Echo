@@ -221,7 +221,7 @@ export function CompanionPanel() {
         {confirmReset ? (
           <div>
             <p className="text-xs leading-5 text-echo-muted/60">
-              Delete all messages and memory? Name and known-since stay.
+              Delete all messages, memory, and journal? Name and known-since stay.
             </p>
             <div className="mt-2 flex gap-2">
               <button

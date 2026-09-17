@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useSession } from "../../components/wallet/use-session";
 import { useCompanion } from "../../components/companion/use-companion";
 import { ConnectButton } from "../../components/wallet/connect-button";
@@ -58,7 +59,15 @@ export default function ChatPage() {
               </div>
             )}
           </div>
-          <ConnectButton showChatLink={false} />
+          <div className="flex items-center gap-2">
+            <Link
+              href="/journal"
+              className="rounded-full border border-white/10 px-4 py-1.5 text-xs text-echo-muted transition hover:border-white/30 hover:text-white"
+            >
+              Journal
+            </Link>
+            <ConnectButton showChatLink={false} />
+          </div>
         </div>
       </header>
       <section className="flex min-h-0 flex-1 flex-col">

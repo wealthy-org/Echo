@@ -57,6 +57,33 @@ export function buildChatPrompt(
   return messages;
 }
 
+// ponytail: FR-07 journal (PRD §10) — untuk DIBACA user langsung, bukan
+// konteks internal seperti memory summary. Poin nyata percakapan hari itu.
+export function buildJournalPrompt(
+  entryDate: string,
+  messages: { role: "user" | "companion"; content: string }[]
+): PromptMessage[] {
+  const convo = messages
+    .map((m) => `${m.role === "user" ? "User" : "Companion"}: ${m.content}`)
+    .join("\n");
+  return [
+    {
+      role: "system",
+      content:
+        "Write a short daily journal entry summarizing the conversation below. " +
+        "This is for the user to read back later — capture real highlights " +
+        "(topics discussed, decisions, feelings, open threads), not technical " +
+        "metadata. Keep it warm and personal, a few short paragraphs or " +
+        "bullets. Write in the same language the user used. " +
+        "Reply with the entry text only, no preamble.",
+    },
+    {
+      role: "user",
+      content: `Date: ${entryDate}\n\nConversation:\n${convo}`,
+    },
+  ];
+}
+
 // ponytail: Phase 9 — prompt ringkas terpisah (PRD §15/§27). Ambil recent yang
 // SAMA dengan chat prompt agar summary konsisten dengan konteks yang dilihat user.
 export function buildSummaryPrompt(
